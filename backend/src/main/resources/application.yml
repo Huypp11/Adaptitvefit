@@ -1,0 +1,24 @@
+spring:
+  config:
+    # Doc bien moi truong tu ../.env khi chay tu thu muc backend/
+    import: optional:file:../.env[.properties]
+  datasource:
+    url: ${DB_URL:jdbc:mysql://localhost:3306/adaptivefit?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate   # schema do Flyway quan ly, Hibernate chi kiem tra
+    open-in-view: false
+  flyway:
+    enabled: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration-minutes: 120
+  cors:
+    allowed-origins: http://localhost:5173
+  admin:
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
