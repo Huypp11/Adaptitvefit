@@ -1,7 +1,7 @@
 import api from './client';
 import type {
-  AuthResponse, Checkin, CheckinInput, Exercise, ExerciseInput, FeedbackInput,
-  PageResponse, Profile, Workout, WorkoutSummary,
+  AuthResponse, Checkin, CheckinInput, Exercise, ExerciseInput, FeedbackInput, Intervention, InterventionInput,
+  PageResponse, Profile, Recommendation, Workout, WorkoutSummary,
 } from './types';
 
 export const authApi = {
@@ -43,8 +43,8 @@ export const adminExerciseApi = {
 };
 
 export const workoutApi = {
-  start: (exerciseIds: number[]) =>
-    api.post<Workout>('/workouts/start', { exerciseIds }).then((r) => r.data),
+  start: (exerciseIds: number[], opts?: { plannedMinutes?: number[]; followRecommendation?: boolean }) =>
+    api.post<Workout>('/workouts/start', { exerciseIds, ...opts }).then((r) => r.data),
   get: (id: number) => api.get<Workout>(`/workouts/${id}`).then((r) => r.data),
   complete: (id: number) => api.post<Workout>(`/workouts/${id}/complete`).then((r) => r.data),
   abandon: (id: number) => api.post<Workout>(`/workouts/${id}/abandon`).then((r) => r.data),
@@ -54,4 +54,14 @@ export const workoutApi = {
 
 export const feedbackApi = {
   create: (f: FeedbackInput) => api.post('/feedback', f).then((r) => r.data),
+};
+
+export const recommendationApi = {
+  today: () => api.get<Recommendation>('/recommendations/today').then((r) => r.data),
+};
+
+export const adminInterventionApi = {
+  list: () => api.get<Intervention[]>('/admin/interventions').then((r) => r.data),
+  update: (id: number, i: InterventionInput) =>
+    api.put<Intervention>(`/admin/interventions/${id}`, i).then((r) => r.data),
 };

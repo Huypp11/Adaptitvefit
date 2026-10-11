@@ -9,4 +9,6 @@ import java.util.List;
 
 public interface ExerciseRepository extends JpaRepository<Exercise, Long>, JpaSpecificationExecutor<Exercise> {
     List<Exercise> findByIdInAndActiveTrue(Collection<Long> ids);
+
+    List<Exercise> findByActiveTrue();
 }

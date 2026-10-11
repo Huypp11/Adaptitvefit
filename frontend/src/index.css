@@ -191,3 +191,18 @@ table.table { width: 100%; border-collapse: collapse; }
 .clock.rest { color: var(--primary); }
 .progress-bar { height: 8px; background: #dbe5e1; border-radius: 99px; overflow: hidden; }
 .progress-bar > i { display: block; height: 100%; background: var(--primary); transition: width 0.4s; }
+
+/* ---------- recommendation ---------- */
+.strategy { display: inline-block; padding: 4px 14px; border-radius: 999px; font-weight: 700; background: var(--ink); color: #fff; }
+.strategy.RESTART { background: #8a5a00; }
+.strategy.RECOVERY { background: var(--primary); }
+.strategy.REDUCE { background: #3b6b8a; }
+.strategy.CHALLENGE { background: #7a3b8a; }
+.bars { display: grid; gap: 6px; }
+.bar { display: grid; grid-template-columns: 9.5rem 1fr 2.6rem; align-items: center; gap: 8px; font-size: 0.85rem; }
+.bar .track { height: 8px; background: #e3ebe8; border-radius: 99px; overflow: hidden; }
+.bar .track i { display: block; height: 100%; background: var(--primary); }
+.checks { display: flex; gap: 8px 20px; flex-wrap: wrap; }
+.checks label { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
+.checks input { width: 18px; height: 18px; accent-color: var(--primary); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85rem; }

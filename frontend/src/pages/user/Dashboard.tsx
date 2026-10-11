@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { checkinApi, profileApi, workoutApi } from '../../api/endpoints';
-import { orNull, parseError } from '../../api/errors';
-import type { Checkin, Profile, WorkoutSummary } from '../../api/types';
-import { STATUS_LABEL } from '../../lib/labels';
+import { checkinApi, profileApi, recommendationApi, workoutApi } from '../../api/endpoints';
+import { orNull, orStatus, parseError } from '../../api/errors';
+import type { Checkin, Profile, Recommendation, WorkoutSummary } from '../../api/types';
+import { STATUS_LABEL, STRATEGY_LABEL } from '../../lib/labels';
 import { addDays, datePart, formatDateLong, formatDateTime, greeting, toISODate, weekdayLabel } from '../../lib/dates';
 
 interface Data {
   profile: Profile | null;
   checkins: Checkin[];
   workouts: WorkoutSummary[];
+  rec: Recommendation | null;
 }
 
 export default function Dashboard() {
@@ -19,8 +20,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     const from = toISODate(addDays(now, -6));
-    Promise.all([orNull(profileApi.get()), checkinApi.list(from, toISODate(now)), workoutApi.history(0, 50)])
-      .then(([profile, checkins, history]) => setData({ profile, checkins, workouts: history.content }))
+    Promise.all([orNull(profileApi.get()), checkinApi.list(from, toISODate(now)), workoutApi.history(0, 50),
+      orStatus(recommendationApi.today(), [400, 404])])
+      .then(([profile, checkins, history, rec]) => setData({ profile, checkins, workouts: history.content, rec: rec.data }))
       .catch((e) => setError(parseError(e).message));
   }, [now]);
 
@@ -99,11 +101,21 @@ export default function Dashboard() {
         </section>
 
         <section className="panel stack">
-          <h2>Nguy cơ bỏ tập và chiến lược hôm nay</h2>
-          <p className="muted">
-            Chưa khả dụng. Phần dự đoán sẽ xuất hiện khi mô hình học máy được huấn luyện và kết nối.
-            Trong lúc chờ, bạn vẫn có thể tự chọn bài tập trong thư viện.
-          </p>
+          <h2>Chiến lược hôm nay</h2>
+          {data.rec ? (
+            <>
+              <p><span className={`strategy ${data.rec.strategy.code}`}>{STRATEGY_LABEL[data.rec.strategy.code] ?? data.rec.strategy.code}</span></p>
+              <p className="muted small">{data.rec.strategy.reasons[0]}</p>
+              {data.rec.recommendation.plan.length > 0 && (
+                <p className="small">Gợi ý: {data.rec.recommendation.plan.map((p) => `${p.name} (${p.plannedMin} phút)`).join(', ')}</p>
+              )}
+              <div><Link className="btn btn-primary" to="/today">Xem gợi ý và bắt đầu</Link></div>
+            </>
+          ) : (
+            <p className="muted">
+              {todayCheckin ? 'Hãy hoàn thiện hồ sơ để nhận gợi ý.' : 'Check-in hôm nay để nhận chiến lược và bài tập phù hợp.'}
+            </p>
+          )}
         </section>
       </div>
 

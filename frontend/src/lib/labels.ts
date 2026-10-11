@@ -42,3 +42,25 @@ export const STATUS_LABEL: Record<string, string> = {
   COMPLETED: 'Đã hoàn thành',
   ABANDONED: 'Đã huỷ',
 };
+
+export const STRATEGY_LABEL: Record<string, string> = {
+  NORMAL: 'Giữ kế hoạch',
+  REDUCE: 'Giảm tải',
+  RECOVERY: 'Phục hồi',
+  RESTART: 'Khởi động lại',
+  CHALLENGE: 'Tăng thử thách',
+};
+
+export const RISK_LABEL: Record<string, string> = { LOW: 'Thấp', MEDIUM: 'Trung bình', HIGH: 'Cao' };
+
+export const EQUIPMENT_OPTIONS: Option[] = [
+  { value: 'yoga_mat', label: 'Thảm tập' },
+  { value: 'jump_rope', label: 'Dây nhảy' },
+  { value: 'bicycle', label: 'Xe đạp' },
+  { value: 'stable_step', label: 'Bậc hoặc ghế/bàn chắc chắn' },
+];
+
+export const BREAKDOWN_LABEL: Record<string, string> = {
+  time: 'Thời gian', energy: 'Năng lượng', goal: 'Mục tiêu',
+  difficulty: 'Độ khó', preference: 'Nơi tập và sở thích', recovery: 'Phục hồi',
+};

@@ -5,6 +5,7 @@ import com.adaptivefit.dto.WorkoutResponse;
 import com.adaptivefit.dto.WorkoutStartRequest;
 import com.adaptivefit.dto.WorkoutSummary;
 import com.adaptivefit.entity.*;
+import com.adaptivefit.exception.BadRequestException;
 import com.adaptivefit.exception.ConflictException;
 import com.adaptivefit.exception.NotFoundException;
 import com.adaptivefit.repository.ExerciseRepository;
@@ -29,6 +30,7 @@ public class WorkoutService {
     private final WorkoutSessionRepository sessionRepository;
     private final ExerciseRepository exerciseRepository;
     private final CurrentUserService currentUser;
+    private final RecommendationService recommendationService;
 
     @Transactional
     public WorkoutResponse start(WorkoutStartRequest req) {
@@ -38,6 +40,10 @@ public class WorkoutService {
         }
 
         List<Long> ids = req.exerciseIds().stream().distinct().toList();
+        List<Integer> minutes = req.plannedMinutes();
+        if (minutes != null && (ids.size() != req.exerciseIds().size() || minutes.size() != ids.size())) {
+            throw new BadRequestException("plannedMinutes phải cùng số lượng và thứ tự với exerciseIds (không trùng bài)");
+        }
         Map<Long, Exercise> byId = exerciseRepository.findByIdInAndActiveTrue(ids).stream()
                 .collect(Collectors.toMap(Exercise::getId, Function.identity()));
         if (byId.size() != ids.size()) {
@@ -48,15 +54,23 @@ public class WorkoutService {
         session.setUser(user);
         session.setStatus(WorkoutStatus.STARTED);
         session.setStartedAt(LocalDateTime.now());
+        if (Boolean.TRUE.equals(req.followRecommendation())) {
+            session.setInterventionCode(recommendationService.strategyCodeFor(user));
+        }
 
         int order = 1;
-        for (Long id : ids) {
-            Exercise e = byId.get(id);
+        for (int i = 0; i < ids.size(); i++) {
+            Exercise e = byId.get(ids.get(i));
+            int planned = minutes == null ? e.getDurationMin() : minutes.get(i);
+            if (planned < e.getDurationMin() || planned > e.getDurationMax()) {
+                throw new BadRequestException("Thời lượng bài \"" + e.getName() + "\" phải từ "
+                        + e.getDurationMin() + " đến " + e.getDurationMax() + " phút");
+            }
             WorkoutSessionExercise item = new WorkoutSessionExercise();
             item.setSession(session);
             item.setExercise(e);
             item.setOrderNo(order++);
-            item.setPlannedMin(e.getDurationMin());
+            item.setPlannedMin(planned);
             session.getExercises().add(item);
         }
         return WorkoutResponse.from(sessionRepository.save(session));

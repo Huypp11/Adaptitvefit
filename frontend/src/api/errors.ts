@@ -30,3 +30,15 @@ export async function orNull<T>(p: Promise<T>): Promise<T | null> {
     throw e;
   }
 }
+
+/** Nhu orNull nhung chap nhan nhieu ma loi (vi du 400 chua co ho so, 404 chua check-in). Tra ve ma loi de giao dien huong dan. */
+export async function orStatus<T>(p: Promise<T>, statuses: number[]): Promise<{ data: T | null; status: number | null }> {
+  try {
+    return { data: await p, status: null };
+  } catch (e) {
+    if (isAxiosError(e) && e.response && statuses.includes(e.response.status)) {
+      return { data: null, status: e.response.status };
+    }
+    throw e;
+  }
+}

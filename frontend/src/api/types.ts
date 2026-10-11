@@ -56,3 +56,30 @@ export interface FeedbackInput {
   sessionId: number; completed: boolean; difficulty?: number; fatigue?: number;
   satisfaction?: number; liked?: boolean; notCompletedReason?: string;
 }
+
+export interface Breakdown {
+  time: number; energy: number; goal: number; difficulty: number; preference: number; recovery: number;
+}
+export interface ScoredExercise {
+  exerciseId: number; name: string; plannedMin: number; score: number; breakdown: Breakdown; reasons: string[];
+}
+export interface PlanItem { exerciseId: number; name: string; plannedMin: number }
+export interface RecommendationResult {
+  budgetMinutes: number; items: ScoredExercise[]; plan: PlanItem[]; excluded: Record<string, number>; message: string | null;
+}
+export interface Recommendation {
+  strategy: { code: string; description: string | null; reasons: string[] };
+  state: {
+    sleepHours: number; stress: number; energy: number; freeTimeMin: number; missedDays: number;
+    workoutFrequency7d: number; riskLevel: string; riskSource: string;
+  };
+  recommendation: RecommendationResult;
+}
+
+export interface Intervention {
+  id: number; code: string; priority: number; description: string | null; active: boolean;
+  conditionExpr: string | null; paramsExpr: string | null;
+}
+export interface InterventionInput {
+  priority: number; conditionExpr: string; paramsExpr?: string; description?: string; active: boolean;
+}

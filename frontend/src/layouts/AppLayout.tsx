@@ -4,13 +4,17 @@ import { useAuth } from '../auth/AuthContext';
 const userLinks = [
   { to: '/', label: 'Tổng quan', end: true },
   { to: '/checkin', label: 'Check-in hằng ngày' },
+  { to: '/today', label: 'Gợi ý hôm nay' },
   { to: '/exercises', label: 'Thư viện bài tập' },
   { to: '/workouts', label: 'Buổi tập của tôi' },
   { to: '/progress', label: 'Tiến độ' },
   { to: '/profile', label: 'Hồ sơ' },
 ];
 
-const adminLinks = [{ to: '/admin/exercises', label: 'Quản lý bài tập', end: false }];
+const adminLinks = [
+  { to: '/admin/exercises', label: 'Quản lý bài tập', end: false },
+  { to: '/admin/interventions', label: 'Quy tắc can thiệp', end: false },
+];
 
 export default function AppLayout() {
   const { user, logout } = useAuth();

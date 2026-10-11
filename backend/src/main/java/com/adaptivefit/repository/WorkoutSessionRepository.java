@@ -7,6 +7,8 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 
+import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 public interface WorkoutSessionRepository extends JpaRepository<WorkoutSession, Long> {
@@ -17,4 +19,6 @@ public interface WorkoutSessionRepository extends JpaRepository<WorkoutSession, 
     boolean existsByUserIdAndStatus(Long userId, WorkoutStatus status);
 
     Page<WorkoutSession> findByUserId(Long userId, Pageable pageable);
+
+    List<WorkoutSession> findByUserIdAndStatusAndFinishedAtGreaterThanEqual(Long userId, WorkoutStatus status, LocalDateTime since);
 }

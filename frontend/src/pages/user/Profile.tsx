@@ -3,7 +3,7 @@ import { profileApi } from '../../api/endpoints';
 import { orNull, parseError } from '../../api/errors';
 import type { Profile as ProfileData } from '../../api/types';
 import Field from '../../components/Field';
-import { FITNESS_LEVELS, GOALS, LOCATIONS } from '../../lib/labels';
+import { EQUIPMENT_OPTIONS, FITNESS_LEVELS, GOALS, LOCATIONS } from '../../lib/labels';
 
 interface FormState {
   age: string; heightCm: string; weightKg: string; fitnessLevel: string; goal: string;
@@ -31,7 +31,8 @@ export default function Profile() {
           setForm({
             age: String(p.age), heightCm: String(p.heightCm), weightKg: String(p.weightKg),
             fitnessLevel: p.fitnessLevel, goal: p.goal, availableMinutes: String(p.availableMinutes),
-            preferredWorkout: p.preferredWorkout ?? '', location: p.location, equipment: p.equipment ?? '',
+            preferredWorkout: p.preferredWorkout ?? '', location: p.location,
+            equipment: (p.equipment ?? '').split(',').map((x) => x.trim()).filter((x) => EQUIPMENT_OPTIONS.some((o) => o.value === x)).join(','),
           });
         }
       })
@@ -107,9 +108,26 @@ export default function Profile() {
           <Field label="Hình thức tập yêu thích" htmlFor="pw" hint="Ví dụ: đi bộ, yoga, chạy bộ" error={fields.preferredWorkout}>
             <input id="pw" className="input" value={form.preferredWorkout} onChange={set('preferredWorkout')} />
           </Field>
-          <Field label="Dụng cụ có sẵn" htmlFor="eq" hint="Ví dụ: thảm yoga, tạ tay. Để trống nếu không có" error={fields.equipment} className="full">
-            <input id="eq" className="input" value={form.equipment} onChange={set('equipment')} />
-          </Field>
+          <fieldset className="field full">
+            <legend>Dụng cụ có sẵn</legend>
+            <div className="checks">
+              {EQUIPMENT_OPTIONS.map((o) => {
+                const owned = form.equipment.split(',').filter(Boolean);
+                return (
+                  <label key={o.value}>
+                    <input type="checkbox" checked={owned.includes(o.value)}
+                           onChange={(e) => setForm((f) => {
+                             const cur = f.equipment.split(',').filter(Boolean);
+                             const next = e.target.checked ? [...cur, o.value] : cur.filter((x) => x !== o.value);
+                             return { ...f, equipment: next.join(',') };
+                           })} />
+                    {o.label}
+                  </label>
+                );
+              })}
+            </div>
+            <p className="hint">Bỏ trống nếu bạn không có dụng cụ nào. Hệ thống chỉ gợi ý bài cần dụng cụ bạn đã chọn.</p>
+          </fieldset>
         </div>
         <div><button className="btn btn-primary">Lưu hồ sơ</button></div>
       </form>

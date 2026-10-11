@@ -22,3 +22,11 @@ app:
   admin:
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
+  recommendation:
+    weights:        # Trong so cham diem goi y bai tap (duoc chuan hoa tong = 1)
+      time: 0.25
+      energy: 0.20
+      goal: 0.20
+      difficulty: 0.15
+      preference: 0.10
+      recovery: 0.10
