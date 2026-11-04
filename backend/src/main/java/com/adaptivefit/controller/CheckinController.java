@@ -2,6 +2,7 @@ package com.adaptivefit.controller;
 
 import com.adaptivefit.dto.CheckinRequest;
 import com.adaptivefit.dto.CheckinResponse;
+import com.adaptivefit.observability.PerformanceTiming;
 import com.adaptivefit.service.CheckinService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -22,7 +23,9 @@ public class CheckinController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     public CheckinResponse create(@Valid @RequestBody CheckinRequest req) {
-        return checkinService.create(req);
+        return PerformanceTiming.measure("controller.checkin.create", () -> {
+            return checkinService.create(req);
+        });
     }
 
     @GetMapping("/today")

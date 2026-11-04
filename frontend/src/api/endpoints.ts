@@ -1,7 +1,8 @@
 import api from './client';
 import type {
-  AuthResponse, Checkin, CheckinInput, Exercise, ExerciseInput, FeedbackInput, Intervention, InterventionInput,
-  PageResponse, Profile, Recommendation, Workout, WorkoutSummary,
+  AuthResponse, Checkin, CheckinInput, Exercise, ExerciseInput, FeedbackInput, FeedbackRecord, Intervention, InterventionInput,
+  PageResponse, Profile, Recommendation, RecommendationFeedback, RecommendationFeedbackInput,
+  RiskInfo, RiskPoint, Workout, WorkoutSummary,
 } from './types';
 
 export const authApi = {
@@ -43,7 +44,7 @@ export const adminExerciseApi = {
 };
 
 export const workoutApi = {
-  start: (exerciseIds: number[], opts?: { plannedMinutes?: number[]; followRecommendation?: boolean }) =>
+  start: (exerciseIds: number[], opts?: { plannedMinutes?: number[]; followRecommendation?: boolean; recommendationId?: number }) =>
     api.post<Workout>('/workouts/start', { exerciseIds, ...opts }).then((r) => r.data),
   get: (id: number) => api.get<Workout>(`/workouts/${id}`).then((r) => r.data),
   complete: (id: number) => api.post<Workout>(`/workouts/${id}/complete`).then((r) => r.data),
@@ -54,14 +55,26 @@ export const workoutApi = {
 
 export const feedbackApi = {
   create: (f: FeedbackInput) => api.post('/feedback', f).then((r) => r.data),
+  list: () => api.get<FeedbackRecord[]>('/feedback').then((r) => r.data),
+  createForRecommendation: (id: number, f: RecommendationFeedbackInput) =>
+    api.post<RecommendationFeedback>(`/feedback/recommendations/${id}`, f).then((r) => r.data),
+  updateForRecommendation: (id: number, f: RecommendationFeedbackInput) =>
+    api.put<RecommendationFeedback>(`/feedback/recommendations/${id}`, f).then((r) => r.data),
 };
 
 export const recommendationApi = {
   today: () => api.get<Recommendation>('/recommendations/today').then((r) => r.data),
+  history: (page = 0, size = 20) =>
+    api.get<PageResponse<Recommendation>>('/recommendations/history', { params: { page, size } }).then((r) => r.data),
 };
 
 export const adminInterventionApi = {
   list: () => api.get<Intervention[]>('/admin/interventions').then((r) => r.data),
   update: (id: number, i: InterventionInput) =>
     api.put<Intervention>(`/admin/interventions/${id}`, i).then((r) => r.data),
+};
+
+export const aiApi = {
+  today: () => api.get<RiskInfo>('/ai/today').then((r) => r.data),
+  history: (days = 30) => api.get<RiskPoint[]>('/ai/risk-history', { params: { days } }).then((r) => r.data),
 };

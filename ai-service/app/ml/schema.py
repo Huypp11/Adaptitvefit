@@ -10,8 +10,6 @@ class Feature:
     description: str
 
 
-# Khong dung age/gender. adherence_7d chua dua vao v1 vi can "so buoi tap ke hoach moi tuan",
-# thong tin nay hien chua co trong ho so nguoi dung.
 FEATURES = [
     Feature("sleep_hours", 0, 14, "So gio ngu dem qua (check-in)"),
     Feature("stress_level", 1, 5, "Muc cang thang 1-5 (check-in)"),

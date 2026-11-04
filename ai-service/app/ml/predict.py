@@ -35,10 +35,13 @@ def predict_risk(features: dict, version: str | None = None) -> dict:
 
 def main():
     ap = argparse.ArgumentParser(description="Du doan nguy co bo tap")
-    ap.add_argument("--json", required=True, help="Chuoi JSON chua dung 10 feature")
+    src = ap.add_mutually_exclusive_group(required=True)
+    src.add_argument("--json", help="Chuoi JSON chua dung 10 feature")
+    src.add_argument("--file", help="File .json chua 10 feature (de dung tren PowerShell)")
     ap.add_argument("--version", default=None)
     a = ap.parse_args()
-    print(json.dumps(predict_risk(json.loads(a.json), a.version), indent=2, ensure_ascii=False))
+    raw = open(a.file, encoding="utf-8-sig").read() if a.file else a.json
+    print(json.dumps(predict_risk(json.loads(raw), a.version), indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":

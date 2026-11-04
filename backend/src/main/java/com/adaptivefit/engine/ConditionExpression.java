@@ -27,11 +27,12 @@ public final class ConditionExpression {
         FIELD_LABELS.put("free_time_min", "Thời gian rảnh (phút)");
         FIELD_LABELS.put("missed_days", "Số ngày chưa tập liên tiếp");
         FIELD_LABELS.put("workout_frequency_7d", "Số ngày có tập trong 7 ngày");
-        FIELD_LABELS.put("risk_rank", "Mức nguy cơ ước tính");
+        FIELD_LABELS.put("exercised_today", "Hôm nay đã tập (1 = có, 0 = chưa)");
+        FIELD_LABELS.put("risk_rank", "Mức nguy cơ");
     }
 
     private static final Pattern COND = Pattern.compile("^([a-z0-9_]+)\\s*(>=|<=|==|!=|>|<)\\s*([A-Za-z0-9_.\\-]+)$");
-    private static final String[] RISK_NAMES = {"", "LOW", "MEDIUM", "HIGH"};
+    private static final String[] RISK_NAMES = {"", "thấp", "trung bình", "cao"};
 
     private final List<List<Condition>> groups;
 
@@ -121,6 +122,11 @@ public final class ConditionExpression {
     public List<String> explain(int groupIndex, Map<String, Double> facts) {
         List<String> out = new ArrayList<>();
         for (Condition c : groups.get(groupIndex)) {
+            if (c.field().equals("exercised_today")) {
+                Double v = facts.get("exercised_today");
+                out.add(v != null && v >= 0.5 ? "Bạn đã tập hôm nay" : "Bạn chưa tập hôm nay");
+                continue;
+            }
             out.add(FIELD_LABELS.get(c.field()) + " là " + show(c.field(), facts.get(c.field()))
                     + " (điều kiện: " + opText(c.op()) + " " + show(c.field(), c.value()) + ")");
         }

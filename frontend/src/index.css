@@ -194,6 +194,7 @@ table.table { width: 100%; border-collapse: collapse; }
 
 /* ---------- recommendation ---------- */
 .strategy { display: inline-block; padding: 4px 14px; border-radius: 999px; font-weight: 700; background: var(--ink); color: #fff; }
+.strategy.DONE { background: #2f6f4f; }
 .strategy.RESTART { background: #8a5a00; }
 .strategy.RECOVERY { background: var(--primary); }
 .strategy.REDUCE { background: #3b6b8a; }
@@ -206,3 +207,17 @@ table.table { width: 100%; border-collapse: collapse; }
 .checks label { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
 .checks input { width: 18px; height: 18px; accent-color: var(--primary); }
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.85rem; }
+
+/* ---------- risk explanation ---------- */
+.score { font-size: clamp(3rem, 9vw, 4.5rem); font-weight: 700; letter-spacing: -0.04em; line-height: 1; font-variant-numeric: tabular-nums; }
+.level { display: inline-block; padding: 3px 14px; border-radius: 999px; font-weight: 700; background: var(--primary-soft); color: var(--primary-strong); }
+.level.MEDIUM { background: #fdf0d2; color: #6b4a00; }
+.level.HIGH { background: #f8dcc9; color: #8a3a05; }
+.factor { display: grid; gap: 6px; padding: 14px 0; border-top: 1px solid var(--line); }
+.factor:first-child { border-top: 0; }
+.dv-track { position: relative; height: 10px; border-radius: 99px; background: #e3ebe8; }
+.dv-track::before { content: ''; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 2px; background: #9fb3ac; }
+.dv-fill { position: absolute; top: 0; bottom: 0; border-radius: 99px; }
+.dv-fill.increase { background: #c2570c; }
+.dv-fill.decrease { background: var(--primary); }
+.dv-legend { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--muted); }

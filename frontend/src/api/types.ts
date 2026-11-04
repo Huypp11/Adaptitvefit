@@ -5,6 +5,7 @@ export interface AuthResponse { token: string; email: string; role: Role }
 export interface Profile {
   age: number; heightCm: number; weightKg: number; fitnessLevel: string; goal: string;
   availableMinutes: number; preferredWorkout: string | null; location: string; equipment: string | null;
+  maxExerciseIntensity: 'LOW' | 'MEDIUM' | 'HIGH';
 }
 
 export interface Checkin {
@@ -56,6 +57,43 @@ export interface FeedbackInput {
   sessionId: number; completed: boolean; difficulty?: number; fatigue?: number;
   satisfaction?: number; liked?: boolean; notCompletedReason?: string;
 }
+export type RecommendationFeedbackStatus = 'COMPLETED' | 'PARTIAL' | 'NOT_DONE' | 'NOT_SUITABLE';
+export interface RecommendationFeedbackInput {
+  status: RecommendationFeedbackStatus;
+  suitabilityRating?: number;
+  difficultyRating?: number;
+  reason?: string;
+  comment?: string;
+}
+export interface RecommendationFeedback {
+  id: number;
+  recommendationId: number;
+  status: RecommendationFeedbackStatus;
+  suitabilityRating: number | null;
+  difficultyRating: number | null;
+  reason: string | null;
+  comment: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface FeedbackRecord {
+  id: number;
+  sessionId: number | null;
+  completed: boolean | null;
+  difficulty: number | null;
+  fatigue: number | null;
+  satisfaction: number | null;
+  liked: boolean | null;
+  notCompletedReason: string | null;
+  createdAt: string;
+  updatedAt: string;
+  recommendationId: number | null;
+  recommendationStatus: RecommendationFeedbackStatus | null;
+  suitabilityRating: number | null;
+  recommendationDifficulty: number | null;
+  recommendationReason: string | null;
+  recommendationComment: string | null;
+}
 
 export interface Breakdown {
   time: number; energy: number; goal: number; difficulty: number; preference: number; recovery: number;
@@ -68,11 +106,17 @@ export interface RecommendationResult {
   budgetMinutes: number; items: ScoredExercise[]; plan: PlanItem[]; excluded: Record<string, number>; message: string | null;
 }
 export interface Recommendation {
+  recommendationId: number;
+  interactionStatus: 'GENERATED' | 'STARTED' | 'COMPLETED' | 'ABANDONED';
+  feedback: RecommendationFeedback | null;
+  createdAt: string;
   strategy: { code: string; description: string | null; reasons: string[] };
   state: {
     sleepHours: number; stress: number; energy: number; freeTimeMin: number; missedDays: number;
     workoutFrequency7d: number; riskLevel: string; riskSource: string;
+    exercisedToday: boolean; exercisedMinutesToday: number | null;
   };
+  risk: RiskInfo;
   recommendation: RecommendationResult;
 }
 
@@ -83,3 +127,14 @@ export interface Intervention {
 export interface InterventionInput {
   priority: number; conditionExpr: string; paramsExpr?: string; description?: string; active: boolean;
 }
+
+export interface RiskFactor {
+  feature: string; label: string; value: number; reference: number;
+  direction: 'increase' | 'decrease'; impactPp: number; text: string;
+}
+export interface RiskInfo {
+  source: 'model' | 'history_rule'; predictionId: number | null; riskScore: number | null; riskLevel: string;
+  baseRisk: number | null; modelVersion: string | null; algorithm: string | null; demoModel: boolean;
+  summary: string | null; factors: RiskFactor[]; otherImpactPp: number | null; notes: string[];
+}
+export interface RiskPoint { date: string; riskScore: number; riskLevel: string }

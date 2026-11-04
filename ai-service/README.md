@@ -1,7 +1,7 @@
 # AdaptiveFit AI - ai-service (Phase 5a: ML baseline offline)
 
-Python: pipeline huan luyen, so sanh va luu model du doan **nguy co bo tap trong 7 ngay toi**. Chua ket noi voi web
-(se noi qua FastAPI o Phase 7) va chua co SHAP (Phase 6).
+Python: pipeline huan luyen, so sanh va luu model du doan **nguy co bo tap trong 7 ngay toi**, giai thich bang **SHAP** (Phase 6)
+va phuc vu qua **FastAPI** cho Spring Boot (Phase 7).
 
 > **DU LIEU DEMO:** model hien tai huan luyen tren du lieu mo phong. Quan he giua trang thai va viec bo tap la **gia dinh**
 > cua nguoi xay dung, nen metric chi chung minh quy trinh chay dung, **khong phai ket qua nghien cuu**.
@@ -33,6 +33,18 @@ python -m app.ml.registry activate v1.0 --allow-demo   # model DEMO chi duoc kic
 # 5. Kiem thu tu dong
 python -m pytest
 ```
+
+## Chay dich vu AI cho web (FastAPI)
+1. Dat `AI_INTERNAL_KEY` trong file `.env` o thu muc goc du an (cung file voi Spring Boot, doc dung gia tri nay).
+2. Cai them thu vien: `pip install -r requirements.txt` (da gom shap, fastapi, uvicorn).
+3. Kich hoat mot model (neu la model DEMO phai co `--allow-demo`): `python -m app.ml.registry activate v1.0 --allow-demo`
+4. Chay: `uvicorn app.main:app --port 8000` (tu thu muc `ai-service`, venv dang bat).
+5. Kiem tra: mo http://localhost:8000/health. Tai lieu API tu dong: http://localhost:8000/docs
+
+Du doan thu tu dong lenh: `python -m app.ml.predict --version v1.0 --file sample_high_risk.json`
+
+Sau khi doi model dang kich hoat, goi `POST /reload` (kem header `X-Internal-Key`) hoac khoi dong lai dich vu.
+Dich vu chi nhan yeu cau co header `X-Internal-Key`; dich vu khong khoi dong neu chua dat `AI_INTERNAL_KEY`.
 Ket qua moi lan train nam o `models/<version>/`: `model.joblib`, `metrics.json`, `comparison.csv`, `feature_schema.json`, `MODEL_CARD.md`.
 
 ## Thiet ke chinh
@@ -44,6 +56,7 @@ Ket qua moi lan train nam o `models/<version>/`: `model.joblib`, `metrics.json`,
 - **Baseline:** luon so voi quy tac don gian `missed_days >= 3`; model phai vuot moc nay moi dang gia.
 - **Kich hoat:** model moi khong tu dong active; `registry activate` kiem tra ROC-AUC >= 0.65 va Recall >= 0.60, va chan model DEMO neu khong co `--allow-demo`.
 - **Do quan trong feature** (permutation) mo ta hanh vi cua model, **khong** phai quan he nhan qua.
+- **SHAP** (`app/ml/explain.py`): giai thich tung du doan so voi **nguoi dung dien hinh** (trung vi cua tap nen). Logistic Regression dung SHAP tuyen tinh chinh xac; model khac dung SHAP hoan vi. Tong cac dong gop bang dung (diem du doan - muc nen).
 
 ## Thay du lieu DEMO bang du lieu that
 Chuan bi CSV co cac cot `user_id, day_index`, 10 feature (xem `app/ml/schema.py`) va `dropout_7d`, roi:
@@ -56,8 +69,9 @@ Khong tron DEMO va du lieu that trong cung mot phien ban (bo kiem tra se tu choi
 ## Cau truc
 ```text
 ai-service/
+  app/main.py (FastAPI)  app/env.py
   app/ml/  config.py schema.py survey.py demo_data.py validation.py dataset_registry.py import_dataset.py
-           splits.py models.py calibration.py evaluate.py train.py registry.py predict.py
+           splits.py models.py calibration.py evaluate.py train.py registry.py predict.py explain.py
   data/    survey_profile.json (chi thong ke tong hop), raw/ (khong commit), versions/ (dataset da sinh)
   models/  cac phien ban model
   tests/

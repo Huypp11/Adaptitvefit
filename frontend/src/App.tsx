@@ -13,6 +13,7 @@ import WorkoutDetail from './pages/user/WorkoutDetail';
 import WorkoutPlayer from './pages/user/WorkoutPlayer';
 import Progress from './pages/user/Progress';
 import Today from './pages/user/Today';
+import Risk from './pages/user/Risk';
 import AdminExercises from './pages/admin/AdminExercises';
 import AdminInterventions from './pages/admin/AdminInterventions';
 
@@ -30,6 +31,7 @@ export default function App() {
               <Route path="/profile" element={<Profile />} />
               <Route path="/checkin" element={<CheckIn />} />
               <Route path="/today" element={<Today />} />
+              <Route path="/risk" element={<Risk />} />
               <Route path="/exercises" element={<Exercises />} />
               <Route path="/workouts" element={<Workouts />} />
               <Route path="/workouts/:id" element={<WorkoutDetail />} />

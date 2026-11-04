@@ -16,11 +16,15 @@ public class Feedback {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @OneToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "session_id", nullable = false, unique = true)
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "session_id", unique = true)
     private WorkoutSession session;
 
-    @Column(nullable = false)
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "recommendation_id", unique = true)
+    private RecommendationHistory recommendation;
+
+    @Column
     private Boolean completed;
 
     private Integer difficulty;
@@ -31,6 +35,25 @@ public class Feedback {
     @Column(name = "not_completed_reason")
     private String notCompletedReason;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "recommendation_status")
+    private RecommendationFeedbackStatus recommendationStatus;
+
+    @Column(name = "suitability_rating")
+    private Integer suitabilityRating;
+
+    @Column(name = "recommendation_difficulty")
+    private Integer recommendationDifficulty;
+
+    @Column(name = "recommendation_reason")
+    private String recommendationReason;
+
+    @Column(name = "recommendation_comment")
+    private String recommendationComment;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt = LocalDateTime.now();
 }

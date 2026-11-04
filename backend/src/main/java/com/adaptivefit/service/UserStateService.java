@@ -3,22 +3,32 @@ package com.adaptivefit.service;
 import com.adaptivefit.engine.HistoryRisk;
 import com.adaptivefit.engine.UserState;
 import com.adaptivefit.entity.DailyCheckin;
+import com.adaptivefit.entity.Feedback;
 import com.adaptivefit.entity.User;
 import com.adaptivefit.entity.WorkoutSession;
 import com.adaptivefit.entity.WorkoutStatus;
+import com.adaptivefit.observability.PerformanceTiming;
 import com.adaptivefit.repository.DailyCheckinRepository;
+import com.adaptivefit.repository.FeedbackRepository;
 import com.adaptivefit.repository.WorkoutSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
- * Dung UserState tu du lieu that. Mot ngay "co tap" la ngay check-in ghi da tap HOAC co buoi tap hoan thanh.
- * missed_days = so ngay lien tiep khong tap tinh den hom nay (gom hom nay), cung dinh nghia voi feature cua model.
+ * Dung trang thai nguoi dung va 10 feature cho model tu du lieu that. Mot ngay "co tap" la ngay check-in ghi da tap
+ * HOAC co buoi tap hoan thanh. missed_days = so ngay lien tiep khong tap tinh den hom nay (gom hom nay).
+ * Thoi luong tap: lay tu check-in; ngay chi co buoi tap hoan thanh thi dung thoi gian thuc te (bat dau -> ket thuc).
+ * Do kho: uu tien feedback buoi tap hoan thanh; dung check-in neu ngay do khong co feedback buoi tap. Khong co du lieu thi 0.
  */
 @Service
 @RequiredArgsConstructor
@@ -26,22 +36,44 @@ public class UserStateService {
 
     private static final int LOOKBACK_DAYS = 60;
 
+    /** state: dung cho Intervention Engine; features: dung de goi model (ten khop schema cua ai-service). */
+    public record Snapshot(UserState state, Map<String, Double> features) {}
+
     private final DailyCheckinRepository checkinRepository;
     private final WorkoutSessionRepository sessionRepository;
+    private final FeedbackRepository feedbackRepository;
 
     public UserState build(User user, DailyCheckin today) {
+        return snapshot(user, today).state();
+    }
+
+    public Snapshot snapshot(User user, DailyCheckin today) {
+        return PerformanceTiming.measure("user_state.snapshot",
+                () -> buildSnapshot(user, today));
+    }
+
+    private Snapshot buildSnapshot(User user, DailyCheckin today) {
+        PerformanceTiming.setUserId(user.getId());
         LocalDate date = today.getCheckinDate();
         LocalDate earliest = user.getCreatedAt().toLocalDate();
-        LocalDate windowStart = earliest.isAfter(date.minusDays(LOOKBACK_DAYS - 1)) ? earliest : date.minusDays(LOOKBACK_DAYS - 1);
+        LocalDate lookbackStart = date.minusDays(LOOKBACK_DAYS - 1L);
+        LocalDate windowStart = earliest.isAfter(lookbackStart) ? earliest : lookbackStart;
+
+        List<DailyCheckin> checkins = PerformanceTiming.measure("user_state.checkin_history_query",
+                () -> checkinRepository.findByUserIdAndCheckinDateBetweenOrderByCheckinDateDesc(
+                        user.getId(), windowStart, date));
+        List<WorkoutSession> sessions = PerformanceTiming.measure("user_state.workout_history_query",
+                () -> sessionRepository.findByUserIdAndStatusAndFinishedAtGreaterThanEqual(
+                        user.getId(), WorkoutStatus.COMPLETED, windowStart.atStartOfDay()));
+        List<Feedback> feedbacks = PerformanceTiming.measure("user_state.feedback_history_query",
+                () -> feedbackRepository.findWorkoutFeedbackSince(
+                        user.getId(), WorkoutStatus.COMPLETED, windowStart.atStartOfDay()));
 
         Set<LocalDate> exercised = new HashSet<>();
-        for (DailyCheckin c : checkinRepository.findByUserIdAndCheckinDateBetweenOrderByCheckinDateDesc(user.getId(), windowStart, date)) {
+        for (DailyCheckin c : checkins) {
             if (Boolean.TRUE.equals(c.getExercisedToday())) exercised.add(c.getCheckinDate());
         }
-        for (WorkoutSession s : sessionRepository.findByUserIdAndStatusAndFinishedAtGreaterThanEqual(
-                user.getId(), WorkoutStatus.COMPLETED, windowStart.atStartOfDay())) {
-            exercised.add(s.getFinishedAt().toLocalDate());
-        }
+        for (WorkoutSession s : sessions) exercised.add(s.getFinishedAt().toLocalDate());
         if (Boolean.TRUE.equals(today.getExercisedToday())) exercised.add(date);
 
         int missed = 0;
@@ -56,8 +88,53 @@ public class UserStateService {
         }
         int observedDays = (int) Math.min(7, ChronoUnit.DAYS.between(earliest, date) + 1);
 
-        return new UserState(today.getSleepHours(), today.getStress(), today.getEnergy(), today.getMood(),
-                today.getMotivation(), today.getFreeTimeMin(), Boolean.TRUE.equals(today.getExercisedToday()),
+        // Thoi luong va do kho trung binh trong 7 ngay gan nhat
+        LocalDate weekStart = date.minusDays(6);
+        Map<LocalDate, Integer> durationByDay = new HashMap<>();
+        Map<LocalDate, List<Integer>> feedbackDifficultyByDay = new HashMap<>();
+        for (Feedback feedback : feedbacks) {
+            LocalDate day = feedback.getSession().getFinishedAt().toLocalDate();
+            Integer difficulty = feedback.getDifficulty();
+            if (!day.isBefore(weekStart) && difficulty != null) {
+                feedbackDifficultyByDay.computeIfAbsent(day, ignored -> new java.util.ArrayList<>()).add(difficulty);
+            }
+        }
+        Map<LocalDate, List<Integer>> difficultyByDay = new HashMap<>(feedbackDifficultyByDay);
+        for (DailyCheckin c : checkins) {
+            if (!Boolean.TRUE.equals(c.getExercisedToday()) || c.getCheckinDate().isBefore(weekStart)) continue;
+            if (c.getDurationMin() != null) durationByDay.put(c.getCheckinDate(), c.getDurationMin());
+            if (c.getDifficulty() != null && !feedbackDifficultyByDay.containsKey(c.getCheckinDate())) {
+                difficultyByDay.computeIfAbsent(c.getCheckinDate(), ignored -> new java.util.ArrayList<>())
+                        .add(c.getDifficulty());
+            }
+        }
+        for (WorkoutSession s : sessions) {
+            LocalDate day = s.getFinishedAt().toLocalDate();
+            if (day.isBefore(weekStart) || durationByDay.containsKey(day)) continue;
+            long minutes = Math.max(1, Math.min(300, Duration.between(s.getStartedAt(), s.getFinishedAt()).toMinutes()));
+            durationByDay.merge(day, (int) minutes, Integer::sum);
+        }
+        double avgDuration = durationByDay.isEmpty() ? 0.0
+                : durationByDay.values().stream().mapToInt(Integer::intValue).average().orElse(0.0);
+        double avgDifficulty = difficultyByDay.values().stream()
+                .mapToDouble(scores -> scores.stream().mapToInt(Integer::intValue).average().orElse(0.0))
+                .average().orElse(0.0);
+
+        UserState state = new UserState(today.getSleepHours(), today.getStress(), today.getEnergy(), today.getMood(),
+                today.getMotivation(), today.getFreeTimeMin(), exercised.contains(date),
                 missed, freq7, HistoryRisk.level(missed, freq7, observedDays), UserState.RISK_SOURCE_HISTORY);
+
+        Map<String, Double> features = new LinkedHashMap<>();
+        features.put("sleep_hours", today.getSleepHours());
+        features.put("stress_level", (double) today.getStress());
+        features.put("energy_level", (double) today.getEnergy());
+        features.put("mood", (double) today.getMood());
+        features.put("motivation", (double) today.getMotivation());
+        features.put("free_time_min", (double) today.getFreeTimeMin());
+        features.put("missed_days", (double) Math.min(missed, 60));
+        features.put("workout_frequency_7d", (double) freq7);
+        features.put("avg_duration_7d", Math.min(300.0, avgDuration));
+        features.put("avg_difficulty_7d", Math.min(5.0, avgDifficulty));
+        return new Snapshot(state, features);
     }
 }

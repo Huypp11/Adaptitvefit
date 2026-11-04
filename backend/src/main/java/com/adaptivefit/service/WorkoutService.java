@@ -35,15 +35,26 @@ public class WorkoutService {
     @Transactional
     public WorkoutResponse start(WorkoutStartRequest req) {
         User user = currentUser.get();
-        if (sessionRepository.existsByUserIdAndStatus(user.getId(), WorkoutStatus.STARTED)) {
-            throw new ConflictException("Bạn đang có một buổi tập chưa kết thúc. Hãy hoàn thành hoặc huỷ nó trước");
-        }
-
         List<Long> ids = req.exerciseIds().stream().distinct().toList();
         List<Integer> minutes = req.plannedMinutes();
         if (minutes != null && (ids.size() != req.exerciseIds().size() || minutes.size() != ids.size())) {
             throw new BadRequestException("plannedMinutes phải cùng số lượng và thứ tự với exerciseIds (không trùng bài)");
         }
+
+        if (req.recommendationId() != null) {
+            WorkoutSession existing = sessionRepository
+                    .findByRecommendation_IdAndUser_Id(req.recommendationId(), user.getId()).orElse(null);
+            if (existing != null) {
+                if (existing.getStatus() == WorkoutStatus.STARTED && sameSelection(existing, ids, minutes)) {
+                    return WorkoutResponse.from(existing);
+                }
+                throw new ConflictException("Gợi ý này đã được dùng để bắt đầu một buổi tập");
+            }
+        }
+        if (sessionRepository.existsByUserIdAndStatus(user.getId(), WorkoutStatus.STARTED)) {
+            throw new ConflictException("Bạn đang có một buổi tập chưa kết thúc. Hãy hoàn thành hoặc huỷ nó trước");
+        }
+
         Map<Long, Exercise> byId = exerciseRepository.findByIdInAndActiveTrue(ids).stream()
                 .collect(Collectors.toMap(Exercise::getId, Function.identity()));
         if (byId.size() != ids.size()) {
@@ -54,8 +65,15 @@ public class WorkoutService {
         session.setUser(user);
         session.setStatus(WorkoutStatus.STARTED);
         session.setStartedAt(LocalDateTime.now());
-        if (Boolean.TRUE.equals(req.followRecommendation())) {
-            session.setInterventionCode(recommendationService.strategyCodeFor(user));
+        if (req.recommendationId() != null || Boolean.TRUE.equals(req.followRecommendation())) {
+            RecommendationService.StrategyContext ctx = req.recommendationId() == null
+                    ? recommendationService.strategyContextFor(user)
+                    : recommendationService.strategyContextFor(user, req.recommendationId(), ids, minutes);
+            if (ctx != null) {
+                session.setInterventionCode(ctx.code());
+                session.setPredictionId(ctx.predictionId());
+                session.setRecommendation(ctx.recommendation());
+            }
         }
 
         int order = 1;
@@ -74,6 +92,15 @@ public class WorkoutService {
             session.getExercises().add(item);
         }
         return WorkoutResponse.from(sessionRepository.save(session));
+    }
+
+    private boolean sameSelection(WorkoutSession existing, List<Long> ids, List<Integer> minutes) {
+        List<Long> existingIds = existing.getExercises().stream().map(item -> item.getExercise().getId()).toList();
+        List<Integer> existingMinutes = existing.getExercises().stream().map(WorkoutSessionExercise::getPlannedMin).toList();
+        List<Integer> requestedMinutes = minutes == null
+                ? existing.getExercises().stream().map(item -> item.getExercise().getDurationMin()).toList()
+                : minutes;
+        return ids.equals(existingIds) && requestedMinutes.equals(existingMinutes);
     }
 
     @Transactional

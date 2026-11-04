@@ -1,6 +1,6 @@
 import pytest
 
-from app.ml import dataset_registry, predict, registry, train
+from app.ml import dataset_registry, explain, predict, registry, train
 
 
 @pytest.fixture
@@ -10,6 +10,9 @@ def isolated_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(registry, "MODELS_DIR", tmp_path / "models")
     monkeypatch.setattr(train, "MODELS_DIR", tmp_path / "models")
     monkeypatch.setattr(predict, "MODELS_DIR", tmp_path / "models")
+    monkeypatch.setattr(explain, "MODELS_DIR", tmp_path / "models")
     predict.load_model.cache_clear()
+    explain.get_explainer.cache_clear()
     yield tmp_path
     predict.load_model.cache_clear()
+    explain.get_explainer.cache_clear()

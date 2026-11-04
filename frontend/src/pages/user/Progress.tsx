@@ -1,20 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { checkinApi, workoutApi } from '../../api/endpoints';
+import { aiApi, checkinApi, workoutApi } from '../../api/endpoints';
 import { parseError } from '../../api/errors';
-import type { Checkin, WorkoutSummary } from '../../api/types';
+import type { Checkin, RiskPoint, WorkoutSummary } from '../../api/types';
 import { addDays, toISODate } from '../../lib/dates';
 import { computeWorkoutStats } from '../../lib/stats';
 
 export default function Progress() {
   const [checkins, setCheckins] = useState<Checkin[] | null>(null);
   const [workouts, setWorkouts] = useState<WorkoutSummary[] | null>(null);
+  const [riskPoints, setRiskPoints] = useState<RiskPoint[]>([]);
   const [error, setError] = useState('');
 
   useEffect(() => {
     const now = new Date();
-    Promise.all([checkinApi.list(toISODate(addDays(now, -29)), toISODate(now)), workoutApi.history(0, 100)])
-      .then(([c, w]) => { setCheckins(c); setWorkouts(w.content); })
+    Promise.all([checkinApi.list(toISODate(addDays(now, -29)), toISODate(now)), workoutApi.history(0, 100), aiApi.history(30)])
+      .then(([c, w, r]) => { setCheckins(c); setWorkouts(w.content); setRiskPoints(r); })
       .catch((e) => setError(parseError(e).message));
   }, []);
 
@@ -75,6 +76,21 @@ export default function Progress() {
             </div>
           </section>
         </>
+      )}
+      {riskPoints.length >= 2 && (
+        <section className="panel stack">
+          <h2>Xu hướng nguy cơ do mô hình dự đoán (%)</h2>
+          <div style={{ height: 240 }}>
+            <ResponsiveContainer>
+              <LineChart data={riskPoints.map((p) => ({ label: p.date.slice(5), risk: Math.round(p.riskScore * 100) }))}>
+                <CartesianGrid stroke="#d5deda" strokeDasharray="3 3" />
+                <XAxis dataKey="label" /><YAxis domain={[0, 100]} /><Tooltip />
+                <Line type="monotone" dataKey="risk" name="Nguy cơ (%)" stroke="#c2570c" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <p className="muted small">Mỗi điểm là dự đoán lúc bạn xem gợi ý trong ngày. Biểu đồ không cho biết việc tập luyện hay gợi ý của hệ thống có làm nguy cơ thay đổi hay không.</p>
+        </section>
       )}
       <p className="muted small">Các số liệu này chỉ mô tả hoạt động của bạn, không phải đánh giá y tế và không nói lên nguyên nhân.</p>
     </div>

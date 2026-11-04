@@ -21,6 +21,7 @@ public record UserState(
         f.put("free_time_min", (double) freeTimeMin);
         f.put("missed_days", (double) missedDays);
         f.put("workout_frequency_7d", (double) workoutFrequency7d);
+        f.put("exercised_today", exercisedToday ? 1.0 : 0.0);
         f.put("risk_rank", (double) ConditionExpression.riskRank(riskLevel));
         return f;
     }

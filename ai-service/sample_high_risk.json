@@ -1,0 +1,5 @@
+{
+  "sleep_hours": 5, "stress_level": 4, "energy_level": 2, "mood": 2, "motivation": 2,
+  "free_time_min": 15, "missed_days": 4, "workout_frequency_7d": 1,
+  "avg_duration_7d": 20, "avg_difficulty_7d": 3
+}

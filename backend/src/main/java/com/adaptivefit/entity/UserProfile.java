@@ -45,4 +45,7 @@ public class UserProfile {
     private String location;
 
     private String equipment;
+
+    @Column(name = "max_exercise_intensity")
+    private String maxExerciseIntensity = "MEDIUM";
 }

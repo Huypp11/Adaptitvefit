@@ -13,5 +13,17 @@ public record ProfileRequest(
         @NotNull @Min(5) @Max(240) Integer availableMinutes,
         @Size(max = 50) String preferredWorkout,
         @NotBlank @Pattern(regexp = "HOME|GYM|OUTDOOR") String location,
-        @Size(max = 255) String equipment
-) {}
+        @Size(max = 255) String equipment,
+        @Pattern(regexp = "LOW|MEDIUM|HIGH") String maxExerciseIntensity
+) {
+    public ProfileRequest {
+        if (maxExerciseIntensity == null) maxExerciseIntensity = "MEDIUM";
+    }
+
+    public ProfileRequest(Integer age, BigDecimal heightCm, BigDecimal weightKg, String fitnessLevel,
+                          String goal, Integer availableMinutes, String preferredWorkout, String location,
+                          String equipment) {
+        this(age, heightCm, weightKg, fitnessLevel, goal, availableMinutes, preferredWorkout, location, equipment,
+                "MEDIUM");
+    }
+}

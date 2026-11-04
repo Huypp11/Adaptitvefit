@@ -42,7 +42,9 @@ public class RecommendationScorer {
         if (params.maxDurationMin() != null) budget = Math.min(budget, params.maxDurationMin());
 
         Map<String, Integer> excluded = new LinkedHashMap<>();
-        for (String k : List.of("equipment", "time", "energy", "intensity", "recovery")) excluded.put(k, 0);
+        for (String k : List.of("location", "equipment", "time", "energy", "intensity", "intensity_conflict", "recovery")) {
+            excluded.put(k, 0);
+        }
 
         List<ScoredExercise> scored = new ArrayList<>();
         Map<Long, ExerciseCandidate> byId = new LinkedHashMap<>();
@@ -66,14 +68,26 @@ public class RecommendationScorer {
 
     // ---------- (1) loc cung ----------
     private String hardFilter(ExerciseCandidate e, UserState s, ProfileContext p, StrategyParams params, int budget) {
+        if (!locationOk(e.location(), p.location())) return "location";
         if (!equipmentOk(e.equipment(), p.equipment())) return "equipment";
         if (e.durationMin() > budget) return "time";
         if (e.energyRequirement() > s.energy()) return "energy";
         int rank = StrategyParams.intensityRank(e.intensity());
-        if (params.maxIntensity() != null && rank > StrategyParams.intensityRank(params.maxIntensity())) return "intensity";
+        int userMaxRank = StrategyParams.intensityRank(p.maxExerciseIntensity());
+        int strategyMaxRank = params.maxIntensity() == null ? Integer.MAX_VALUE
+                : StrategyParams.intensityRank(params.maxIntensity());
+        int effectiveMaxRank = Math.min(userMaxRank, strategyMaxRank);
+        if (params.minIntensity() != null
+                && StrategyParams.intensityRank(params.minIntensity()) > effectiveMaxRank) return "intensity_conflict";
+        if (rank > effectiveMaxRank) return "intensity";
         if (params.minIntensity() != null && rank < StrategyParams.intensityRank(params.minIntensity())) return "intensity";
         if (params.requireRecovery() && !e.recoverySuitable()) return "recovery";
         return null;
+    }
+
+    private boolean locationOk(String exerciseLocation, String preferredLocation) {
+        if (exerciseLocation == null || preferredLocation == null) return false;
+        return exerciseLocation.equalsIgnoreCase("ANY") || exerciseLocation.equalsIgnoreCase(preferredLocation);
     }
 
     boolean equipmentOk(String required, String owned) {
@@ -104,7 +118,7 @@ public class RecommendationScorer {
 
         ScoredExercise.Breakdown b = new ScoredExercise.Breakdown(r3(time), r3(energy), r3(goal),
                 r3(difficulty), r3(preference), r3(recovery));
-        return new ScoredExercise(e.id(), e.name(), planned, r3(total), b, reasons(b, e, s, planned, d));
+        return new ScoredExercise(e.id(), e.name(), planned, r3(total), b, reasons(b, e, s, p, planned, d));
     }
 
     private double goalMatch(ExerciseCandidate e, ProfileContext p, StrategyDecision d) {
@@ -151,16 +165,32 @@ public class RecommendationScorer {
         };
     }
 
-    private List<String> reasons(ScoredExercise.Breakdown b, ExerciseCandidate e, UserState s, int planned, StrategyDecision d) {
+    private List<String> reasons(ScoredExercise.Breakdown b, ExerciseCandidate e, UserState s,
+                                 ProfileContext p, int planned, StrategyDecision d) {
         List<String> r = new ArrayList<>();
+        if ("ANY".equalsIgnoreCase(e.location())) {
+            r.add("Bài tập linh hoạt địa điểm, phù hợp với lựa chọn " + p.location());
+        } else {
+            r.add("Đúng địa điểm bạn đã chọn (" + p.location() + ")");
+        }
+        if (e.equipment() == null || e.equipment().isBlank() || "NONE".equalsIgnoreCase(e.equipment())) {
+            r.add("Không cần dụng cụ bổ sung");
+        } else {
+            r.add("Có đủ dụng cụ cần thiết: " + e.equipment());
+        }
+        r.add("Cường độ " + e.intensity() + " không vượt mức tối đa bạn chọn (" + p.maxExerciseIntensity() + ")");
+        r.add("Thời lượng " + planned + " phút nằm trong quỹ " + s.freeTimeMin() + " phút hôm nay");
         if (b.time() >= 0.99) r.add("Vừa với " + planned + " phút bạn có hôm nay");
         if (b.energy() >= 0.85) r.add("Hợp với mức năng lượng hiện tại (" + s.energy() + "/5)");
         if (b.goal() >= 0.99) r.add("Đúng mục tiêu của bạn");
         if (b.recovery() >= 0.99 && d.code().equals("RECOVERY")) r.add("Phù hợp để phục hồi");
         if (b.preference() >= 0.8) r.add("Hợp nơi tập và sở thích của bạn");
         if (b.difficulty() >= 0.85) r.add("Độ khó vừa sức");
-        if (r.isEmpty()) r.add("Có điểm tổng hợp cao nhất trong các bài phù hợp");
-        return r.size() > 3 ? new ArrayList<>(r.subList(0, 3)) : r;
+        if (b.energy() < 0.85 && b.goal() < 0.99 && b.recovery() < 0.99
+                && b.preference() < 0.8 && b.difficulty() < 0.85) {
+            r.add("Được xếp hạng cao trong các bài còn phù hợp");
+        }
+        return r.size() > 6 ? new ArrayList<>(r.subList(0, 6)) : r;
     }
 
     // ---------- (3) chon top-N da dang va buoc tap ----------
@@ -207,8 +237,12 @@ public class RecommendationScorer {
         String top = excluded.entrySet().stream().filter(x -> x.getValue() == max).findFirst().get().getKey();
         return switch (top) {
             case "equipment" -> "Hầu hết bài cần dụng cụ bạn chưa có. Hãy cập nhật dụng cụ trong Hồ sơ.";
+            case "location" -> "Không có bài tập phù hợp với địa điểm bạn đã chọn.";
             case "time" -> "Các bài hiện có đều dài hơn thời gian bạn rảnh hôm nay.";
             case "energy" -> "Hầu hết bài cần nhiều năng lượng hơn mức hiện tại của bạn.";
+            case "intensity_conflict" -> "Giới hạn cường độ của bạn không tương thích với chiến lược hiện tại.";
+            case "intensity" -> "Các bài hiện có vượt giới hạn cường độ bạn chấp nhận.";
+            case "recovery" -> "Không có bài phù hợp với yêu cầu phục hồi hiện tại.";
             default -> "Không có bài nào khớp ràng buộc của chiến lược hôm nay.";
         };
     }

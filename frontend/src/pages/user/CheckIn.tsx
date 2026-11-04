@@ -1,16 +1,19 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { checkinApi } from '../../api/endpoints';
+import { checkinApi, workoutApi } from '../../api/endpoints';
 import { orNull, parseError } from '../../api/errors';
 import type { Checkin, CheckinInput } from '../../api/types';
 import Field from '../../components/Field';
 import Rating from '../../components/Rating';
 import Toggle from '../../components/Toggle';
+import { datePart, toISODate } from '../../lib/dates';
 import { MISSED_REASONS, labelOf } from '../../lib/labels';
 
 export default function CheckIn() {
   const navigate = useNavigate();
   const [existing, setExisting] = useState<Checkin | null>(null);
+  const [completedWorkoutToday, setCompletedWorkoutToday] = useState(false);
+  const [completedWorkoutDuration, setCompletedWorkoutDuration] = useState(1);
   const [loading, setLoading] = useState(true);
 
   const [sleep, setSleep] = useState('');
@@ -29,8 +32,26 @@ export default function CheckIn() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    orNull(checkinApi.today())
-      .then(setExisting)
+    Promise.all([orNull(checkinApi.today()), workoutApi.history(0, 100)])
+      .then(([today, history]) => {
+        setExisting(today);
+        const todayDate = toISODate(new Date());
+        const completedToday = history.content.filter(
+          (workout) => workout.status === 'COMPLETED'
+            && workout.finishedAt !== null
+            && datePart(workout.finishedAt) === todayDate,
+        );
+        setCompletedWorkoutToday(completedToday.length > 0);
+        if (completedToday.length > 0) {
+          const minutes = completedToday.reduce((total, workout) => {
+            if (!workout.finishedAt) return total;
+            return total + Math.max(1, Math.round(
+              (new Date(workout.finishedAt).getTime() - new Date(workout.startedAt).getTime()) / 60_000,
+            ));
+          }, 0);
+          setCompletedWorkoutDuration(Math.min(300, Math.max(1, minutes)));
+        }
+      })
       .catch((e) => setError(parseError(e).message))
       .finally(() => setLoading(false));
   }, []);
@@ -43,15 +64,18 @@ export default function CheckIn() {
     if (energy === null) missing.energy = 'Chọn một mức';
     if (mood === null) missing.mood = 'Chọn một mức';
     if (motivation === null) missing.motivation = 'Chọn một mức';
-    if (exercised && !duration) missing.durationMin = 'Nhập số phút bạn đã tập';
+    if (!completedWorkoutToday && exercised && !duration) missing.durationMin = 'Nhập số phút bạn đã tập';
     setFields(missing);
     if (Object.keys(missing).length > 0) return;
 
     const payload: CheckinInput = {
       sleepHours: Number(sleep), stress: stress!, energy: energy!, mood: mood!,
-      motivation: motivation!, freeTimeMin: Number(freeTime), exercisedToday: exercised,
+      motivation: motivation!, freeTimeMin: Number(freeTime),
+      exercisedToday: completedWorkoutToday || exercised,
     };
-    if (exercised) {
+    if (completedWorkoutToday) {
+      payload.durationMin = completedWorkoutDuration;
+    } else if (exercised) {
       payload.durationMin = Number(duration);
       if (difficulty !== null) payload.difficulty = difficulty;
     } else if (reason) {
@@ -94,7 +118,8 @@ export default function CheckIn() {
           </ul>
         </section>
         <div className="row">
-          <Link className="btn btn-primary" to="/exercises">Chọn bài tập</Link>
+          <Link className="btn btn-primary" to="/today">{existing.exercisedToday ? 'Xem gợi ý thư giãn' : 'Xem gợi ý hôm nay'}</Link>
+          <Link className="btn" to="/exercises">Thư viện bài tập</Link>
           <Link className="btn" to="/">Về tổng quan</Link>
         </div>
       </div>
@@ -129,23 +154,31 @@ export default function CheckIn() {
           <Rating label="Động lực tập luyện" low="Thấp" high="Cao" value={motivation} onChange={setMotivation} error={fields.motivation} />
         </div>
 
-        <Toggle label="Hôm nay bạn đã tập chưa?" value={exercised} onChange={setExercised} yes="Đã tập" no="Chưa tập" />
-
-        {exercised ? (
-          <div className="form-grid">
-            <Field label="Bạn đã tập bao nhiêu phút?" htmlFor="dur" error={fields.durationMin}>
-              <input id="dur" className="input" type="number" min="1" max="300"
-                     value={duration} onChange={(e) => setDuration(e.target.value)} />
-            </Field>
-            <Rating label="Độ khó buổi tập" low="Dễ" high="Rất khó" value={difficulty} onChange={setDifficulty} error={fields.difficulty} />
-          </div>
+        {completedWorkoutToday ? (
+          <p className="notice notice-ok" role="status">
+            Đã tự ghi nhận buổi tập hoàn thành hôm nay ({completedWorkoutDuration} phút).
+            Độ khó sẽ lấy từ phản hồi buổi tập, không hỏi lại ở check-in.
+          </p>
         ) : (
-          <Field label="Lý do chưa tập (không bắt buộc)" htmlFor="reason" error={fields.missedReason}>
-            <select id="reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)}>
-              <option value="">Không nêu</option>
-              {MISSED_REASONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-            </select>
-          </Field>
+          <>
+            <Toggle label="Hôm nay bạn đã tập chưa?" value={exercised} onChange={setExercised} yes="Đã tập" no="Chưa tập" />
+            {exercised ? (
+              <div className="form-grid">
+                <Field label="Bạn đã tập bao nhiêu phút?" htmlFor="dur" error={fields.durationMin}>
+                  <input id="dur" className="input" type="number" min="1" max="300"
+                         value={duration} onChange={(e) => setDuration(e.target.value)} />
+                </Field>
+                <Rating label="Độ khó buổi tập" low="Dễ" high="Rất khó" value={difficulty} onChange={setDifficulty} error={fields.difficulty} />
+              </div>
+            ) : (
+              <Field label="Lý do chưa tập (không bắt buộc)" htmlFor="reason" error={fields.missedReason}>
+                <select id="reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)}>
+                  <option value="">Không nêu</option>
+                  {MISSED_REASONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </Field>
+            )}
+          </>
         )}
 
         <div><button className="btn btn-primary" disabled={busy}>{busy ? 'Đang lưu...' : 'Lưu check-in'}</button></div>

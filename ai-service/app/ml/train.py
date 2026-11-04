@@ -110,6 +110,8 @@ def run_training(dataset: str, seed: int = SEED, fast: bool = False, notes: str 
     model.version = version
     model.meta = {"is_demo": manifest["is_demo"], "algorithm": chosen, "dataset": dataset}
     joblib.dump(model, out / "model.joblib")
+    # Tap nen cho SHAP: mau cac dong train (khong chua nhan), de giai thich so voi "nhom tham chieu"
+    X_tr.sample(min(200, len(X_tr)), random_state=seed).to_csv(out / "background.csv", index=False)
     (out / "metrics.json").write_text(json.dumps(metrics, ensure_ascii=False, indent=2, default=_default), encoding="utf-8")
     (out / "feature_schema.json").write_text(json.dumps(
         [{"name": f.name, "min": f.min, "max": f.max, "description": f.description} for f in FEATURES],

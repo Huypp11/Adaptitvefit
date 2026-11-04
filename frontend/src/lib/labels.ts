@@ -23,6 +23,11 @@ export const INTENSITIES: Option[] = [
   { value: 'MEDIUM', label: 'Vừa' },
   { value: 'HIGH', label: 'Nặng' },
 ];
+export const MAX_EXERCISE_INTENSITIES: Option[] = [
+  { value: 'LOW', label: 'LOW – Nhẹ nhàng' },
+  { value: 'MEDIUM', label: 'MEDIUM – Trung bình' },
+  { value: 'HIGH', label: 'HIGH – Có thể tập cường độ cao' },
+];
 export const MISSED_REASONS: Option[] = [
   { value: 'NO_TIME', label: 'Không có thời gian' },
   { value: 'TOO_TIRED', label: 'Quá mệt' },
@@ -44,6 +49,7 @@ export const STATUS_LABEL: Record<string, string> = {
 };
 
 export const STRATEGY_LABEL: Record<string, string> = {
+  DONE: 'Đã tập xong',
   NORMAL: 'Giữ kế hoạch',
   REDUCE: 'Giảm tải',
   RECOVERY: 'Phục hồi',

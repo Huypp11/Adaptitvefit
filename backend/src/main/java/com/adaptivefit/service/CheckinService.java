@@ -7,6 +7,7 @@ import com.adaptivefit.entity.User;
 import com.adaptivefit.exception.BadRequestException;
 import com.adaptivefit.exception.ConflictException;
 import com.adaptivefit.exception.NotFoundException;
+import com.adaptivefit.observability.PerformanceTiming;
 import com.adaptivefit.repository.DailyCheckinRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,9 +25,12 @@ public class CheckinService {
 
     @Transactional
     public CheckinResponse create(CheckinRequest req) {
-        User user = currentUser.get();
+        User user = PerformanceTiming.measure("checkin.current_user", currentUser::get);
+        PerformanceTiming.setUserId(user.getId());
         LocalDate today = LocalDate.now();
-        if (repository.existsByUserIdAndCheckinDate(user.getId(), today)) {
+        boolean exists = PerformanceTiming.measure("checkin.duplicate_lookup",
+                () -> repository.existsByUserIdAndCheckinDate(user.getId(), today));
+        if (exists) {
             throw new ConflictException("Bạn đã check-in hôm nay");
         }
         boolean exercised = req.exercisedToday();
@@ -49,7 +53,8 @@ public class CheckinService {
         c.setDifficulty(exercised ? req.difficulty() : null);
         c.setMissedReason(exercised ? null : req.missedReason());
         // TODO Phase 7: goi AI predict + Intervention + Recommendation tai day
-        return CheckinResponse.from(repository.save(c));
+        return PerformanceTiming.measure("checkin.save",
+                () -> CheckinResponse.from(repository.save(c)));
     }
 
     @Transactional(readOnly = true)

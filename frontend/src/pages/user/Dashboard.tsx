@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { checkinApi, profileApi, recommendationApi, workoutApi } from '../../api/endpoints';
 import { orNull, orStatus, parseError } from '../../api/errors';
 import type { Checkin, Profile, Recommendation, WorkoutSummary } from '../../api/types';
-import { STATUS_LABEL, STRATEGY_LABEL } from '../../lib/labels';
+import { RISK_LABEL, STATUS_LABEL, STRATEGY_LABEL } from '../../lib/labels';
 import { addDays, datePart, formatDateLong, formatDateTime, greeting, toISODate, weekdayLabel } from '../../lib/dates';
 
 interface Data {
@@ -84,6 +84,7 @@ export default function Dashboard() {
           <h2>Check-in hôm nay</h2>
           {todayCheckin ? (
             <>
+              {todayCheckin.exercisedToday && <p className="small">Bạn đã tập hôm nay{todayCheckin.durationMin ? ` ${todayCheckin.durationMin} phút` : ''}.</p>}
               <p>
                 Ngủ <b>{todayCheckin.sleepHours}h</b> · Căng thẳng <b>{todayCheckin.stress}/5</b> · Năng lượng <b>{todayCheckin.energy}/5</b>
               </p>
@@ -105,11 +106,18 @@ export default function Dashboard() {
           {data.rec ? (
             <>
               <p><span className={`strategy ${data.rec.strategy.code}`}>{STRATEGY_LABEL[data.rec.strategy.code] ?? data.rec.strategy.code}</span></p>
+              {data.rec.risk.source === 'model' && data.rec.risk.riskScore !== null && (
+                <p className="small">
+                  Nguy cơ bỏ tập theo mô hình AI: <b>{Math.round(data.rec.risk.riskScore * 100)}%</b>{' '}
+                  (mức {(RISK_LABEL[data.rec.risk.riskLevel] ?? data.rec.risk.riskLevel).toLowerCase()})
+                  {data.rec.risk.demoModel ? ', mô hình DEMO' : ''}
+                </p>
+              )}
               <p className="muted small">{data.rec.strategy.reasons[0]}</p>
               {data.rec.recommendation.plan.length > 0 && (
-                <p className="small">Gợi ý: {data.rec.recommendation.plan.map((p) => `${p.name} (${p.plannedMin} phút)`).join(', ')}</p>
+                <p className="small">{data.rec.strategy.code === 'DONE' ? 'Tuỳ chọn thư giãn' : 'Gợi ý'}: {data.rec.recommendation.plan.map((p) => `${p.name} (${p.plannedMin} phút)`).join(', ')}</p>
               )}
-              <div><Link className="btn btn-primary" to="/today">Xem gợi ý và bắt đầu</Link></div>
+              <div><Link className="btn btn-primary" to="/today">{data.rec.strategy.code === 'DONE' ? 'Xem gợi ý thư giãn' : 'Xem gợi ý và bắt đầu'}</Link></div>
             </>
           ) : (
             <p className="muted">

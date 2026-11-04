@@ -26,6 +26,10 @@ public class WorkoutSession {
     @Column(name = "prediction_id")
     private Long predictionId;
 
+    @OneToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "recommendation_id", unique = true)
+    private RecommendationHistory recommendation;
+
     /** Se duoc gan o Phase 4 khi co Intervention Engine. */
     @Column(name = "intervention_code")
     private String interventionCode;

@@ -3,16 +3,21 @@ import { profileApi } from '../../api/endpoints';
 import { orNull, parseError } from '../../api/errors';
 import type { Profile as ProfileData } from '../../api/types';
 import Field from '../../components/Field';
-import { EQUIPMENT_OPTIONS, FITNESS_LEVELS, GOALS, LOCATIONS } from '../../lib/labels';
+import { EQUIPMENT_OPTIONS, FITNESS_LEVELS, GOALS, LOCATIONS, MAX_EXERCISE_INTENSITIES } from '../../lib/labels';
 
 interface FormState {
   age: string; heightCm: string; weightKg: string; fitnessLevel: string; goal: string;
   availableMinutes: string; preferredWorkout: string; location: string; equipment: string;
+  maxExerciseIntensity: 'LOW' | 'MEDIUM' | 'HIGH';
+}
+
+function isMaxExerciseIntensity(value: string): value is FormState['maxExerciseIntensity'] {
+  return MAX_EXERCISE_INTENSITIES.some((option) => option.value === value);
 }
 
 const empty: FormState = {
   age: '', heightCm: '', weightKg: '', fitnessLevel: 'BEGINNER', goal: 'STAY_ACTIVE',
-  availableMinutes: '30', preferredWorkout: '', location: 'HOME', equipment: '',
+  availableMinutes: '30', preferredWorkout: '', location: 'HOME', equipment: '', maxExerciseIntensity: 'MEDIUM',
 };
 
 export default function Profile() {
@@ -33,6 +38,7 @@ export default function Profile() {
             fitnessLevel: p.fitnessLevel, goal: p.goal, availableMinutes: String(p.availableMinutes),
             preferredWorkout: p.preferredWorkout ?? '', location: p.location,
             equipment: (p.equipment ?? '').split(',').map((x) => x.trim()).filter((x) => EQUIPMENT_OPTIONS.some((o) => o.value === x)).join(','),
+            maxExerciseIntensity: p.maxExerciseIntensity ?? 'MEDIUM',
           });
         }
       })
@@ -51,6 +57,7 @@ export default function Profile() {
       fitnessLevel: form.fitnessLevel, goal: form.goal, availableMinutes: Number(form.availableMinutes),
       preferredWorkout: form.preferredWorkout.trim() || null, location: form.location,
       equipment: form.equipment.trim() || null,
+      maxExerciseIntensity: form.maxExerciseIntensity,
     };
     try {
       await profileApi.save(payload);
@@ -103,6 +110,18 @@ export default function Profile() {
           <Field label="Nơi tập thường xuyên" htmlFor="loc" error={fields.location}>
             <select id="loc" className="input" value={form.location} onChange={set('location')}>
               {LOCATIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Cường độ tập luyện tối đa bạn chấp nhận" htmlFor="max-intensity" error={fields.maxExerciseIntensity}
+                 hint="Đây là mức tối đa; hệ thống có thể đề xuất bài nhẹ hơn tùy theo thời gian và trạng thái hôm nay.">
+            <select id="max-intensity" className="input" value={form.maxExerciseIntensity}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (isMaxExerciseIntensity(value)) {
+                        setForm((current) => ({ ...current, maxExerciseIntensity: value }));
+                      }
+                    }}>
+              {MAX_EXERCISE_INTENSITIES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </Field>
           <Field label="Hình thức tập yêu thích" htmlFor="pw" hint="Ví dụ: đi bộ, yoga, chạy bộ" error={fields.preferredWorkout}>

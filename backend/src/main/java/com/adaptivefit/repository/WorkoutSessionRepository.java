@@ -16,6 +16,12 @@ public interface WorkoutSessionRepository extends JpaRepository<WorkoutSession, 
     @EntityGraph(attributePaths = {"exercises", "exercises.exercise"})
     Optional<WorkoutSession> findByIdAndUserId(Long id, Long userId);
 
+    Optional<WorkoutSession> findByRecommendation_IdAndUser_Id(Long recommendationId, Long userId);
+
+    long countByRecommendationIsNotNull();
+
+    long countByRecommendationIsNotNullAndStatus(WorkoutStatus status);
+
     boolean existsByUserIdAndStatus(Long userId, WorkoutStatus status);
 
     Page<WorkoutSession> findByUserId(Long userId, Pageable pageable);

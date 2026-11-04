@@ -42,6 +42,7 @@ public class ProfileService {
         p.setPreferredWorkout(req.preferredWorkout());
         p.setLocation(req.location());
         p.setEquipment(req.equipment());
+        p.setMaxExerciseIntensity(req.maxExerciseIntensity());
         return ProfileResponse.from(profileRepository.save(p));
     }
 }

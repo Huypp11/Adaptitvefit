@@ -5,6 +5,7 @@ const userLinks = [
   { to: '/', label: 'Tổng quan', end: true },
   { to: '/checkin', label: 'Check-in hằng ngày' },
   { to: '/today', label: 'Gợi ý hôm nay' },
+  { to: '/risk', label: 'Phân tích AI' },
   { to: '/exercises', label: 'Thư viện bài tập' },
   { to: '/workouts', label: 'Buổi tập của tôi' },
   { to: '/progress', label: 'Tiến độ' },

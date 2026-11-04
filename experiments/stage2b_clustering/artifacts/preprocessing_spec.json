@@ -1,0 +1,91 @@
+{
+  "candidate_files": [
+    "candidate_models.joblib",
+    "shortlisted_candidates.joblib"
+  ],
+  "shortlist_keys": [
+    "B|gower_agglomerative|k=2",
+    "A_gap|gower_agglomerative|k=2",
+    "A|kmeans_numeric|k=2",
+    "A_gap|kmeans_numeric|k=2",
+    "A|kprototypes|k=2",
+    "C|kprototypes|k=2"
+  ],
+  "selection_status": "No cross-algorithm winner selected.",
+  "categorical_and_ordinal_maps": {
+    "usual_session_duration": {
+      "kind": "ordinal_special",
+      "order": [
+        "under_15_min",
+        "15_30_min",
+        "30_45_min",
+        "46_60_min",
+        "over_60_min"
+      ],
+      "special": "not_currently_training"
+    },
+    "sleep_duration": {
+      "kind": "ordinal",
+      "order": [
+        "under_5_hours",
+        "5_6_hours",
+        "6_7_hours",
+        "7_8_hours",
+        "over_8_hours"
+      ]
+    },
+    "stress_level": {
+      "kind": "ordinal",
+      "order": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    "energy_level": {
+      "kind": "ordinal",
+      "order": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    "mood": {
+      "kind": "ordinal",
+      "order": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    "motivation": {
+      "kind": "ordinal",
+      "order": [
+        1,
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    "daily_available_training_time": {
+      "kind": "ordinal",
+      "order": [
+        "under_15_min",
+        "15_30_min",
+        "31_45_min",
+        "46_60_min",
+        "over_60_min"
+      ]
+    }
+  },
+  "timestamp_excluded": true,
+  "respondent_context_excluded": true,
+  "q8_q9_missing_features_excluded": true
+}

@@ -1,0 +1,12 @@
+ma_kiem_thu,luong_kiem_thu,ket_qua_thuc_te,trang_thai,ghi_chu
+E2E01,"AI Service GET /health","HTTP 200; active_model=v2.0; is_demo_model=true","PASS","Health check chỉ đọc; model vẫn là demo."
+E2E02,"Frontend GET /","HTTP 200","PASS","Xác nhận dev server phục vụ trang HTML; chưa xác minh UI sau đăng nhập."
+E2E03,"Đăng ký hai người dùng kiểm thử","Cả hai đăng ký thành công; nhận JWT","PASS","Tạo trong schema test đã được người dùng xác nhận là disposable; không ghi email/token vào báo cáo."
+E2E04,"Profile API với maxExerciseIntensity không hợp lệ","Bị từ chối 4xx","PASS","Kiểm tra validation API."
+E2E05,"Profile API round-trip với GYM và intensity LOW","Lưu và đọc lại LOW thành công","PASS","Xác nhận runtime truy cập được cột profile mới của V11."
+E2E06,"Check-in API với stress ngoài miền","Bị từ chối 4xx","PASS","Validation API; không tạo check-in."
+E2E07,"Tạo check-in hợp lệ","Thành công","PASS","Tạo check-in cho tài khoản kiểm thử."
+E2E08,"GET /api/recommendations/today lần đầu","HTTP 500","FAIL","Request không trả về recommendation; không thu được response body hoặc backend stack trace."
+E2E09,"GET /api/recommendations/today lần chẩn đoán","Hết thời gian chờ sau 30 giây","FAIL","Không tiếp tục thử lại; cần xem log Spring Boot/MySQL để tìm nguyên nhân."
+E2E10,"Workout start từ recommendation","Không chạy","NOT_RUN","Bị chặn do recommendation endpoint thất bại."
+E2E11,"Hoàn thành workout và đọc lại","Không chạy","NOT_RUN","Không có workout được tạo."

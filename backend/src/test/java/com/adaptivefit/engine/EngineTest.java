@@ -14,18 +14,25 @@ class EngineTest {
 
     // Bo quy tac mac dinh, phai KHOP voi migration V7__intervention_rules.sql
     private static final List<RuleDef> RULES = List.of(
-            new RuleDef("RESTART", 1, "missed_days>=3 | risk_rank>=HIGH&missed_days>=2",
+            new RuleDef("DONE", 1, "exercised_today==1",
+                    "maxDurationMin=10;maxIntensity=LOW;requireRecovery=true;difficultyShift=-1", "done", true),
+            new RuleDef("RESTART", 2, "missed_days>=3 | risk_rank>=HIGH&missed_days>=2",
                     "maxDurationMin=15;maxIntensity=LOW;difficultyShift=-1", "restart", true),
-            new RuleDef("RECOVERY", 2, "sleep_hours<6&stress_level>=4&energy_level<=2",
+            new RuleDef("RECOVERY", 3, "sleep_hours<6&stress_level>=4&energy_level<=2",
                     "maxDurationMin=20;maxIntensity=LOW;requireRecovery=true;difficultyShift=-1", "recovery", true),
-            new RuleDef("REDUCE", 3, "free_time_min<20 | energy_level<=2 | risk_rank==MEDIUM",
+            new RuleDef("REDUCE", 4, "free_time_min<20 | energy_level<=2 | risk_rank==MEDIUM",
                     "maxDurationMin=20;maxIntensity=MEDIUM;difficultyShift=-0.5", "reduce", true),
-            new RuleDef("CHALLENGE", 4, "risk_rank==LOW&energy_level>=4&workout_frequency_7d>=3",
+            new RuleDef("CHALLENGE", 5, "risk_rank==LOW&energy_level>=4&workout_frequency_7d>=3",
                     "minIntensity=MEDIUM;difficultyShift=0.7", "challenge", true),
-            new RuleDef("NORMAL", 5, "*", "", "normal", true));
+            new RuleDef("NORMAL", 6, "*", "", "normal", true));
 
     private static UserState state(double sleep, int stress, int energy, int free, int missed, int freq) {
         return new UserState(sleep, stress, energy, 3, 3, free, false, missed, freq,
+                HistoryRisk.level(missed, freq), UserState.RISK_SOURCE_HISTORY);
+    }
+
+    private static UserState stateDone(double sleep, int stress, int energy, int free, int missed, int freq) {
+        return new UserState(sleep, stress, energy, 3, 3, free, true, missed, freq,
                 HistoryRisk.level(missed, freq), UserState.RISK_SOURCE_HISTORY);
     }
 
@@ -100,6 +107,28 @@ class EngineTest {
     }
 
     @Test
+    void alreadyExercisedTodayWinsOverEverythingElse() {
+        assertEquals("DONE", decide(stateDone(8, 2, 5, 60, 0, 5)));          // dieu kien CHALLENGE van dung, nhung da tap roi
+        assertEquals("DONE", decide(stateDone(5, 4, 2, 15, 0, 1)));          // ca khi cung dang met va it thoi gian
+        assertEquals("CHALLENGE", decide(state(8, 2, 5, 60, 0, 5)));         // chua tap thi van nhu cu
+        StrategyDecision d = new InterventionEngine().decide(stateDone(8, 2, 5, 60, 0, 5), RULES);
+        assertEquals(List.of("Bạn đã tập hôm nay"), d.reasons());
+    }
+
+    @Test
+    void doneStrategyOnlyOffersShortLightRecoveryOptions() {
+        List<ExerciseCandidate> all = List.of(
+                ex(1, "Giãn cơ", 5, 10, 1, "LOW", "NONE", "HOME", "back", "RECOVERY", 1, true),
+                ex(2, "Squat", 10, 20, 2, "MEDIUM", "NONE", "HOME", "legs", "BUILD_MUSCLE", 2, false),
+                ex(3, "Yoga dài", 15, 30, 2, "LOW", "NONE", "HOME", "full", "RECOVERY", 2, true));
+        UserState s = stateDone(8, 2, 5, 60, 0, 5);
+        StrategyDecision d = new InterventionEngine().decide(s, RULES);
+        RecommendationResult r = new RecommendationScorer().recommend(s, PROFILE, d, all, 3);
+        assertEquals(List.of(1L), r.items().stream().map(ScoredExercise::exerciseId).toList());
+        assertTrue(r.budgetMinutes() <= 10);
+    }
+
+    @Test
     void usesNormalFallbackAndSkipsBrokenOrInactiveRules() {
         List<RuleDef> broken = List.of(
                 new RuleDef("RESTART", 1, "garbage??", "", "x", true),
@@ -138,7 +167,7 @@ class EngineTest {
         assertEquals(1, r.excluded().get("intensity"));
 
         RecommendationResult withRope = new RecommendationScorer().recommend(state(7, 3, 5, 30, 0, 3),
-                new ProfileContext("BEGINNER", "STAY_ACTIVE", "HOME", "Dây nhảy, tạ tay", ""),
+                new ProfileContext("BEGINNER", "STAY_ACTIVE", "HOME", "Dây nhảy, tạ tay", "", "HIGH"),
                 strategy("NORMAL", ""), all, 5);
         assertTrue(withRope.items().stream().anyMatch(i -> i.exerciseId() == 2L));
 

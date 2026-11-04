@@ -4,6 +4,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
@@ -15,5 +16,6 @@ import java.util.List;
 public record WorkoutStartRequest(
         @NotEmpty @Size(max = 10) List<@NotNull Long> exerciseIds,
         @Size(max = 10) List<@NotNull @Min(1) @Max(240) Integer> plannedMinutes,
-        Boolean followRecommendation
+        Boolean followRecommendation,
+        @Positive Long recommendationId
 ) {}
