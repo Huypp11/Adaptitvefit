@@ -2,6 +2,7 @@ import api from './client';
 import type {
   AuthResponse, Checkin, CheckinInput, Exercise, ExerciseInput, FeedbackInput, FeedbackRecord, Intervention, InterventionInput,
   PageResponse, Profile, Recommendation, RecommendationFeedback, RecommendationFeedbackInput,
+  RecommendationAnalytics, RecommendationDataConsent, RecommendationEventInput,
   RiskInfo, RiskPoint, Workout, WorkoutSummary,
 } from './types';
 
@@ -44,11 +45,14 @@ export const adminExerciseApi = {
 };
 
 export const workoutApi = {
-  start: (exerciseIds: number[], opts?: { plannedMinutes?: number[]; followRecommendation?: boolean; recommendationId?: number }) =>
+  start: (exerciseIds: number[], opts?: {
+    plannedMinutes?: number[]; followRecommendation?: boolean; recommendationId?: number; trackingId?: string;
+  }) =>
     api.post<Workout>('/workouts/start', { exerciseIds, ...opts }).then((r) => r.data),
   get: (id: number) => api.get<Workout>(`/workouts/${id}`).then((r) => r.data),
   complete: (id: number) => api.post<Workout>(`/workouts/${id}/complete`).then((r) => r.data),
-  abandon: (id: number) => api.post<Workout>(`/workouts/${id}/abandon`).then((r) => r.data),
+  abandon: (id: number, reason?: string) =>
+    api.post<Workout>(`/workouts/${id}/abandon`, reason ? { reason } : {}).then((r) => r.data),
   history: (page = 0, size = 20) =>
     api.get<PageResponse<WorkoutSummary>>('/workouts', { params: { page, size } }).then((r) => r.data),
 };
@@ -66,6 +70,15 @@ export const recommendationApi = {
   today: () => api.get<Recommendation>('/recommendations/today').then((r) => r.data),
   history: (page = 0, size = 20) =>
     api.get<PageResponse<Recommendation>>('/recommendations/history', { params: { page, size } }).then((r) => r.data),
+};
+
+export const recommendationDataApi = {
+  consent: () => api.get<RecommendationDataConsent>('/recommendation-data-consent').then((r) => r.data),
+  updateConsent: (granted: boolean, policyVersion: string) =>
+    api.put<RecommendationDataConsent>('/recommendation-data-consent', { granted, policyVersion }).then((r) => r.data),
+  recordEvent: (event: RecommendationEventInput) =>
+    api.post<{ recorded: boolean }>('/recommendation-events', event).then((r) => r.data),
+  analytics: () => api.get<RecommendationAnalytics>('/admin/recommendation-analytics').then((r) => r.data),
 };
 
 export const adminInterventionApi = {

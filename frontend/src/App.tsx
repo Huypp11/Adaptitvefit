@@ -16,6 +16,8 @@ import Today from './pages/user/Today';
 import Risk from './pages/user/Risk';
 import AdminExercises from './pages/admin/AdminExercises';
 import AdminInterventions from './pages/admin/AdminInterventions';
+import RecommendationDataPrivacy from './pages/user/RecommendationDataPrivacy';
+import AdminRecommendationAnalytics from './pages/admin/AdminRecommendationAnalytics';
 
 export default function App() {
   return (
@@ -29,6 +31,7 @@ export default function App() {
             <Route element={<RequireRole role="USER" />}>
               <Route path="/" element={<Dashboard />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/recommendation-data" element={<RecommendationDataPrivacy />} />
               <Route path="/checkin" element={<CheckIn />} />
               <Route path="/today" element={<Today />} />
               <Route path="/risk" element={<Risk />} />
@@ -41,6 +44,7 @@ export default function App() {
             <Route element={<RequireRole role="ADMIN" />}>
               <Route path="/admin/exercises" element={<AdminExercises />} />
               <Route path="/admin/interventions" element={<AdminInterventions />} />
+              <Route path="/admin/recommendation-analytics" element={<AdminRecommendationAnalytics />} />
             </Route>
           </Route>
 

@@ -12,6 +12,7 @@ import com.adaptivefit.engine.RuleDef;
 import com.adaptivefit.engine.RecommendationResult;
 import com.adaptivefit.engine.RecommendationScorer;
 import com.adaptivefit.engine.StrategyDecision;
+import com.adaptivefit.engine.StrategyParams;
 import com.adaptivefit.engine.UserState;
 import com.adaptivefit.engine.Weights;
 import com.adaptivefit.entity.DailyCheckin;
@@ -19,6 +20,7 @@ import com.adaptivefit.entity.Exercise;
 import com.adaptivefit.entity.RecommendationHistory;
 import com.adaptivefit.entity.User;
 import com.adaptivefit.entity.UserProfile;
+import com.adaptivefit.entity.WorkoutStatus;
 import com.adaptivefit.exception.BadRequestException;
 import com.adaptivefit.exception.NotFoundException;
 import com.adaptivefit.observability.PerformanceTiming;
@@ -50,7 +52,8 @@ public class RecommendationService {
     private static final int TOP_N = 3;
 
     /** Chien luoc luc bat dau buoi tap va du doan lien quan (de truy vet ve sau). */
-    public record StrategyContext(String code, Long predictionId, RecommendationHistory recommendation) {}
+    public record StrategyContext(String code, Long predictionId, RecommendationHistory recommendation,
+                                  boolean selectionChanged) {}
 
     private final CurrentUserService currentUser;
     private final DailyCheckinRepository checkinRepository;
@@ -105,7 +108,8 @@ public class RecommendationService {
                 .orElseThrow(() -> new BadRequestException("Hãy hoàn thiện hồ sơ trước để nhận gợi ý"));
         DailyCheckin checkin = PerformanceTiming.measure("recommendation.checkin_lock_query",
                 () -> checkinRepository.findByUserIdAndCheckinDateForUpdate(user.getId(), LocalDate.now()))
-                .orElseThrow(() -> new NotFoundException("Hôm nay bạn chưa check-in"));
+                .orElse(null);
+        if (checkin == null) return buildProfileFallback(user, profile);
         RecommendationHistory existing = PerformanceTiming.measure("recommendation.snapshot_lock_query",
                 () -> recommendationRepository.findForUpdate(checkin.getId(), user.getId()))
                 .orElse(null);
@@ -122,13 +126,14 @@ public class RecommendationService {
         List<RuleDef> activeRules = PerformanceTiming.measure("recommendation.active_rules_query",
                 interventionService::activeRules);
         StrategyDecision decision = PerformanceTiming.measure("intervention_engine.decide",
-                () -> engine.decide(state, activeRules, profile.getMaxExerciseIntensity()));
+                () -> decideForRisk(state, risk, activeRules, profile.getMaxExerciseIntensity()));
 
         List<ExerciseCandidate> candidates = PerformanceTiming.measure("recommendation.active_exercises_query_and_map",
                 () -> exerciseRepository.findByActiveTrue().stream().map(this::toCandidate).toList());
         ProfileContext context = new ProfileContext(profile.getFitnessLevel(), profile.getGoal(), profile.getLocation(),
                 profile.getEquipment(), profile.getPreferredWorkout(),
-                profile.getMaxExerciseIntensity() == null ? "MEDIUM" : profile.getMaxExerciseIntensity());
+                profile.getMaxExerciseIntensity() == null ? "MEDIUM" : profile.getMaxExerciseIntensity(),
+                recentAbandonmentReason(user));
         RecommendationResult result = PerformanceTiming.measure("recommendation.scorer",
                 () -> scorer.recommend(state, context, decision, candidates, TOP_N));
 
@@ -148,6 +153,24 @@ public class RecommendationService {
         RecommendationHistory saved = PerformanceTiming.measure("recommendation.snapshot_persist",
                 () -> recommendationRepository.saveAndFlush(history));
         return PerformanceTiming.measure("recommendation.response_mapping", () -> toResponse(saved));
+    }
+
+    private RecommendationResponse buildProfileFallback(User user, UserProfile profile) {
+        int availableMinutes = profile.getAvailableMinutes() == null ? 30 : profile.getAvailableMinutes();
+        UserState state = userStateService.profileFallback(user, availableMinutes);
+        List<ExerciseCandidate> candidates = PerformanceTiming.measure("recommendation.active_exercises_query_and_map",
+                () -> exerciseRepository.findByActiveTrue().stream().map(this::toCandidate).toList());
+        ProfileContext context = new ProfileContext(profile.getFitnessLevel(), profile.getGoal(), profile.getLocation(),
+                profile.getEquipment(), profile.getPreferredWorkout(),
+                profile.getMaxExerciseIntensity() == null ? "MEDIUM" : profile.getMaxExerciseIntensity(),
+                recentAbandonmentReason(user));
+        StrategyDecision normal = new StrategyDecision("NORMAL", "Bài tập mặc định dựa trên hồ sơ",
+                List.of("Chưa có check-in hôm nay; dùng hồ sơ và lịch sử hoạt động gần đây"), StrategyParams.none());
+        RecommendationResult result = PerformanceTiming.measure("recommendation.scorer",
+                () -> scorer.recommend(state, context, normal, candidates, TOP_N));
+        return new RecommendationResponse(null, "GENERATED", null, LocalDateTime.now(),
+                new RecommendationResponse.Strategy(normal.code(), normal.description(), normal.reasons()),
+                null, null, result, "PROFILE_FALLBACK", java.util.UUID.randomUUID().toString());
     }
 
     /** Danh gia nguy co cua check-in hom nay (diem + giai thich SHAP). Khong can ho so. */
@@ -175,8 +198,9 @@ public class RecommendationService {
         if (checkin == null) return null;
         UserStateService.Snapshot snap = userStateService.snapshot(user, checkin);
         RiskInfo risk = riskService.assess(checkin, snap.features(), snap.state().riskLevel());
-        StrategyDecision decision = engine.decide(withRisk(snap.state(), risk), interventionService.activeRules());
-        return new StrategyContext(decision.code(), risk.predictionId(), null);
+        StrategyDecision decision = decideForRisk(withRisk(snap.state(), risk), risk, interventionService.activeRules(),
+                null);
+        return new StrategyContext(decision.code(), risk.predictionId(), null, false);
     }
 
     @Transactional(readOnly = true)
@@ -196,7 +220,15 @@ public class RecommendationService {
                 throw new BadRequestException("Bài tập hoặc thời lượng không thuộc gợi ý đã chọn");
             }
         }
-        return new StrategyContext(snapshot.strategy().code(), history.getRiskPredictionId(), history);
+        List<Long> recommendedIds = snapshot.recommendation().plan().stream()
+                .map(RecommendationResult.PlanItem::exerciseId).toList();
+        boolean selectionChanged = !recommendedIds.equals(exerciseIds);
+        if (!selectionChanged && plannedMinutes != null) {
+            List<Integer> recommendedMinutes = snapshot.recommendation().plan().stream()
+                    .map(RecommendationResult.PlanItem::plannedMin).toList();
+            selectionChanged = !recommendedMinutes.equals(plannedMinutes);
+        }
+        return new StrategyContext(snapshot.strategy().code(), history.getRiskPredictionId(), history, selectionChanged);
     }
 
     private DailyCheckin todayCheckin(User user) {
@@ -205,8 +237,52 @@ public class RecommendationService {
     }
 
     private UserState withRisk(UserState s, RiskInfo risk) {
+        String level = risk.riskLevel();
+        if ("model".equals(risk.source()) && risk.riskScore() != null) {
+            level = riskBand(risk.riskScore());
+        }
         return new UserState(s.sleepHours(), s.stress(), s.energy(), s.mood(), s.motivation(), s.freeTimeMin(),
-                s.exercisedToday(), s.missedDays(), s.workoutFrequency7d(), risk.riskLevel(), risk.source());
+                s.exercisedToday(), s.missedDays(), s.workoutFrequency7d(), level, risk.source());
+    }
+
+    private StrategyDecision decideForRisk(UserState state, RiskInfo risk, List<RuleDef> rules, String maxIntensity) {
+        StrategyDecision decision = engine.decide(state, rules, maxIntensity);
+        if (!"model".equals(risk.source()) || risk.riskScore() == null || state.exercisedToday()) return decision;
+        String band = riskBand(risk.riskScore());
+        if (band.equals("LOW")) return decision;
+        boolean fatigueEvidence = state.sleepHours() < 6.0 || state.stress() >= 4 || state.energy() <= 2;
+        String code = band.equals("HIGH") && fatigueEvidence ? "RECOVERY" : "REDUCE";
+        String explanation = code.equals("RECOVERY")
+                ? "Nguy cơ bỏ lỡ buổi tập cao kèm dấu hiệu mệt mỏi từ check-in; ưu tiên phục hồi"
+                : "Ưu tiên giảm tải do nguy cơ bỏ lỡ buổi tập";
+        return strategyForCode(code, rules, explanation);
+    }
+
+    static String riskBand(double score) {
+        return score <= 0.30 ? "LOW" : score <= 0.60 ? "MEDIUM" : "HIGH";
+    }
+
+    private StrategyDecision strategyForCode(String code, List<RuleDef> rules, String explanation) {
+        RuleDef rule = rules.stream().filter(r -> r.active() && r.code().equals(code)).findFirst().orElse(null);
+        StrategyParams params = rule == null ? defaultParams(code) : StrategyParams.parse(rule.paramsExpr());
+        String description = rule == null ? explanation : rule.description();
+        return new StrategyDecision(code, description, List.of(explanation), params);
+    }
+
+    private StrategyParams defaultParams(String code) {
+        return switch (code) {
+            case "RECOVERY" -> new StrategyParams(15, "LOW", null, true, -1.0);
+            case "REDUCE" -> new StrategyParams(20, "MEDIUM", null, false, -0.5);
+            default -> StrategyParams.none();
+        };
+    }
+
+    private String recentAbandonmentReason(User user) {
+        LocalDate today = LocalDate.now();
+        LocalDateTime yesterday = today.minusDays(1).atStartOfDay();
+        return feedbackRepository.findRecentAbandonmentReasons(user.getId(), WorkoutStatus.ABANDONED,
+                        yesterday, today.atStartOfDay(), PageRequest.of(0, 1))
+                .stream().findFirst().orElse(null);
     }
 
     private RecommendationResponse toResponse(RecommendationHistory history) {
@@ -218,7 +294,8 @@ public class RecommendationService {
                 .map(RecommendationFeedbackResponse::from)
                 .orElse(null);
         return new RecommendationResponse(history.getId(), interactionStatus, feedback, history.getCreatedAt(), snapshot.strategy(),
-                snapshot.state(), snapshot.risk(), snapshot.recommendation());
+                snapshot.state(), snapshot.risk(), snapshot.recommendation(), "CHECKIN",
+                "recommendation:" + history.getId());
     }
 
     private String writeSnapshot(RecommendationSnapshot snapshot) {

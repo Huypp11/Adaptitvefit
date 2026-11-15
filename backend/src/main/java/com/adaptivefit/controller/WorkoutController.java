@@ -1,6 +1,7 @@
 package com.adaptivefit.controller;
 
 import com.adaptivefit.dto.PageResponse;
+import com.adaptivefit.dto.AbandonWorkoutRequest;
 import com.adaptivefit.dto.WorkoutResponse;
 import com.adaptivefit.dto.WorkoutStartRequest;
 import com.adaptivefit.dto.WorkoutSummary;
@@ -8,6 +9,7 @@ import com.adaptivefit.service.WorkoutService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -29,8 +31,9 @@ public class WorkoutController {
     }
 
     @PostMapping("/{id}/abandon")
-    public WorkoutResponse abandon(@PathVariable Long id) {
-        return workoutService.abandon(id);
+    public WorkoutResponse abandon(@PathVariable Long id,
+                                   @RequestBody(required = false) @Valid AbandonWorkoutRequest request) {
+        return workoutService.abandon(id, request == null ? null : request.reason());
     }
 
     @GetMapping("/{id}")

@@ -59,12 +59,22 @@ Ket qua moi lan train nam o `models/<version>/`: `model.joblib`, `metrics.json`,
 - **SHAP** (`app/ml/explain.py`): giai thich tung du doan so voi **nguoi dung dien hinh** (trung vi cua tap nen). Logistic Regression dung SHAP tuyen tinh chinh xac; model khac dung SHAP hoan vi. Tong cac dong gop bang dung (diem du doan - muc nen).
 
 ## Thay du lieu DEMO bang du lieu that
-Chuan bi CSV co cac cot `user_id, day_index`, 10 feature (xem `app/ml/schema.py`) va `dropout_7d`, roi:
+Khong dung CSV khao sat cat ngang lam nhan `dropout_7d`: nhan nay can theo doi ket qua sau moi ngay du doan.
+Quy trinh pilot can hai CSV:
+- `snapshots.csv`: `user_id,snapshot_date,training_consent` va 10 feature tai thoi diem du doan.
+- `outcomes.csv`: `user_id,outcome_date,training_consent,observed,did_workout`; moi dong dai dien mot ngay, trong do `observed=true` chi khi biet ro ngay do co tap hay khong.
+
+`training_consent` la dong y rieng cho viec dung du lieu de huan luyen; khong tu dong suy ra tu consent telemetry `recommendation-events-v1`. Dung user ID ma gia danh on dinh, khong dung email/ten; khong dua file raw vao Git. `did_workout` phai bao gom workout hop le trong app va hoat dong ngoai app neu duoc xac nhan trong giao thuc pilot. Khong duoc suy ra `did_workout=false` tu viec khong thay workout trong database.
+
+Cong cu chi tao nhan neu co du 7 ngay lien tiep sau snapshot, moi ngay deu `observed=true`, `training_consent=true` va co gia tri `did_workout`. Thieu ngay, mat consent hoac ket qua chua ro thi snapshot bi loai, khong gan nhan am:
 ```powershell
-python -m app.ml.import_dataset --csv data/raw/real.csv --name real_v1 --source pilot_2026_11 --real
-python -m app.ml.train --dataset real_v1
+python -m app.ml.prepare_real_dataset --snapshots data/raw/pilot_snapshots.csv --outcomes data/raw/pilot_outcomes.csv --name pilot_real_v1 --source pilot_2026_11
+python -m app.ml.train --dataset pilot_real_v1 --fast
 ```
-Khong tron DEMO va du lieu that trong cung mot phien ban (bo kiem tra se tu choi).
+
+Lenh train tren chi chay sau khi du lieu dat nguong so dong/so nguoi/so mau moi lop hien co. So sanh model voi baseline va giu test split theo nguoi dung; khong kich hoat model moi tu dong. Dinh nghia nhan van la “khong co buoi tap nao trong 7 ngay” va phai duoc xac nhan bang theo doi du ngay, khong chi dua vao log workout trong ung dung. Khong tron DEMO va du lieu that trong cung mot phien ban dataset.
+
+Luu y: chua co file export pilot trong repository, va migration V12 chi phuc vu recommendation telemetry, khong phai dong y huan luyen model. Can xay dung/duyet quy trinh thu thap, xuat CSV va dong y huan luyen rieng truoc khi co the tao dataset that.
 
 ## Cau truc
 ```text

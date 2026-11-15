@@ -38,7 +38,7 @@ export interface PageResponse<T> {
   content: T[]; page: number; size: number; totalElements: number; totalPages: number;
 }
 
-export type WorkoutStatus = 'STARTED' | 'COMPLETED' | 'ABANDONED';
+export type WorkoutStatus = 'STARTED' | 'COMPLETED' | 'ABANDONED' | 'INVALID_WORKOUT';
 
 export interface WorkoutItem {
   exerciseId: number; name: string; orderNo: number; plannedMin: number;
@@ -48,10 +48,10 @@ export interface WorkoutItem {
 
 export interface Workout {
   id: number; status: WorkoutStatus; interventionCode: string | null;
-  startedAt: string; finishedAt: string | null; exercises: WorkoutItem[];
+  startedAt: string; finishedAt: string | null; exercises: WorkoutItem[]; notCompletedReason: string | null;
 }
 
-export type WorkoutSummary = Omit<Workout, 'exercises'>;
+export type WorkoutSummary = Omit<Workout, 'exercises' | 'notCompletedReason'>;
 
 export interface FeedbackInput {
   sessionId: number; completed: boolean; difficulty?: number; fatigue?: number;
@@ -105,19 +105,63 @@ export interface PlanItem { exerciseId: number; name: string; plannedMin: number
 export interface RecommendationResult {
   budgetMinutes: number; items: ScoredExercise[]; plan: PlanItem[]; excluded: Record<string, number>; message: string | null;
 }
+export interface RecommendationState {
+  sleepHours: number; stress: number; energy: number; freeTimeMin: number; missedDays: number;
+  workoutFrequency7d: number; riskLevel: string; riskSource: string;
+  exercisedToday: boolean; exercisedMinutesToday: number | null;
+}
 export interface Recommendation {
-  recommendationId: number;
-  interactionStatus: 'GENERATED' | 'STARTED' | 'COMPLETED' | 'ABANDONED';
+  recommendationId: number | null;
+  trackingId: string;
+  mode: 'CHECKIN' | 'PROFILE_FALLBACK';
+  interactionStatus: 'GENERATED' | 'STARTED' | 'COMPLETED' | 'ABANDONED' | 'INVALID_WORKOUT';
   feedback: RecommendationFeedback | null;
   createdAt: string;
   strategy: { code: string; description: string | null; reasons: string[] };
-  state: {
-    sleepHours: number; stress: number; energy: number; freeTimeMin: number; missedDays: number;
-    workoutFrequency7d: number; riskLevel: string; riskSource: string;
-    exercisedToday: boolean; exercisedMinutesToday: number | null;
-  };
-  risk: RiskInfo;
+  state: RecommendationState | null;
+  risk: RiskInfo | null;
   recommendation: RecommendationResult;
+}
+
+export interface RecommendationDataConsent {
+  trackingEnabled: boolean;
+  policyVersion: string;
+  changedAt: string | null;
+  storedEventCount: number;
+}
+
+export type RecommendationEventType = 'DISPLAYED' | 'SKIPPED';
+export interface RecommendationEventInput {
+  eventType: RecommendationEventType;
+  recommendationId: number | null;
+  trackingId: string;
+  idempotencyKey: string;
+  recommendationMode: Recommendation['mode'];
+}
+
+export interface RecommendationAnalytics {
+  windowDays: number;
+  usersWithCurrentConsent: number;
+  displayedCheckinJourneys: number;
+  displayedFallbackJourneys: number;
+  matureJourneys: number;
+  completedValidWithin24Hours: number;
+  completionRateWithin24Hours: number | null;
+  matureCheckinJourneys: number;
+  completedCheckinWithin24Hours: number;
+  completionRateCheckinWithin24Hours: number | null;
+  matureFallbackJourneys: number;
+  completedFallbackWithin24Hours: number;
+  completionRateFallbackWithin24Hours: number | null;
+  skippedJourneys: number;
+  startedJourneys: number;
+  abandonedJourneys: number;
+  invalidWorkoutJourneys: number;
+  journeysWithoutFeedback: number;
+  journeysStillWithinObservationWindow: number;
+  lifecycleEventsWithoutStart: number;
+  journeysWithoutCompletionEvent: number;
+  note: string;
 }
 
 export interface Intervention {

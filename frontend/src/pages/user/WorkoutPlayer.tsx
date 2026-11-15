@@ -3,6 +3,7 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router-dom';
 import { profileApi, workoutApi } from '../../api/endpoints';
 import { orNull, parseError } from '../../api/errors';
 import type { Workout } from '../../api/types';
+import AbandonReasonDialog from '../../components/AbandonReasonDialog';
 import ExerciseImage from '../../components/ExerciseImage';
 import { estimateKcal, formatClock, metFor } from '../../lib/calories';
 
@@ -23,6 +24,7 @@ export default function WorkoutPlayer() {
   const [idx, setIdx] = useState(0);
   const [left, setLeft] = useState(0);
   const [paused, setPaused] = useState(false);
+  const [confirmAbandon, setConfirmAbandon] = useState(false);
 
   useEffect(() => {
     if (!Number.isFinite(workoutId)) { setError('Đường dẫn buổi tập không hợp lệ'); return; }
@@ -81,6 +83,18 @@ export default function WorkoutPlayer() {
       setError(parseError(e).message);
       setBusy(false);
     }
+
+  }
+
+  async function abandon(reason?: string) {
+    setError(''); setBusy(true);
+    try {
+      await workoutApi.abandon(workoutId, reason);
+      navigate(`/workouts/${workoutId}`, { replace: true });
+    } catch (e) {
+      setError(parseError(e).message);
+      setBusy(false);
+    }
   }
 
   if (phase === 'ready') {
@@ -101,7 +115,10 @@ export default function WorkoutPlayer() {
         <div className="row">
           <button className="btn btn-primary" onClick={begin}>Bắt đầu</button>
           <Link className="btn" to={`/workouts/${workout.id}`}>Quay lại</Link>
+          <button className="btn btn-danger" disabled={busy} onClick={() => setConfirmAbandon(true)}>Huỷ buổi tập</button>
         </div>
+        {confirmAbandon && <AbandonReasonDialog busy={busy} onChoose={(reason) => abandon(reason)}
+                                                 onSkip={() => abandon()} />}
       </div>
     );
   }
@@ -121,6 +138,8 @@ export default function WorkoutPlayer() {
           <button className="btn btn-primary" disabled={busy} onClick={finish}>Hoàn thành buổi tập</button>
           <Link className="btn" to={`/workouts/${workout.id}`}>Để sau</Link>
         </div>
+        {confirmAbandon && <AbandonReasonDialog busy={busy} onChoose={(reason) => abandon(reason)}
+                                                 onSkip={() => abandon()} />}
       </div>
     );
   }
@@ -144,9 +163,13 @@ export default function WorkoutPlayer() {
       <div className="row">
         <button className="btn btn-primary" onClick={() => setPaused((p) => !p)}>{paused ? 'Tiếp tục' : 'Tạm dừng'}</button>
         <button className="btn" onClick={() => setLeft(0)}>{resting ? 'Bỏ qua nghỉ' : idx >= items.length - 1 ? 'Kết thúc bài' : 'Sang bài tiếp'}</button>
-        <Link className="btn btn-quiet" to={`/workouts/${workout.id}`}>Thoát</Link>
+        <button className="btn btn-danger" disabled={busy} onClick={() => { setPaused(true); setConfirmAbandon(true); }}>
+          Huỷ buổi tập
+        </button>
       </div>
 
+      {confirmAbandon && <AbandonReasonDialog busy={busy} onChoose={(reason) => abandon(reason)}
+                                               onSkip={() => abandon()} />}
       <div className="guide-grid">
         <ExerciseImage media={shown.media} alt={`Minh họa bài ${shown.name}`} />
         <div className="stack" style={{ gap: 10 }}>

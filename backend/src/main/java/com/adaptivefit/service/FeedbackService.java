@@ -34,6 +34,7 @@ public class FeedbackService {
     private final WorkoutSessionRepository sessionRepository;
     private final RecommendationHistoryRepository recommendationRepository;
     private final CurrentUserService currentUser;
+    private final RecommendationEventService recommendationEventService;
 
     @Transactional
     public FeedbackResponse create(FeedbackRequest req) {
@@ -43,6 +44,9 @@ public class FeedbackService {
 
         if (session.getStatus() == WorkoutStatus.STARTED) {
             throw new ConflictException("Hãy kết thúc buổi tập trước khi gửi feedback");
+        }
+        if (session.getStatus() == WorkoutStatus.INVALID_WORKOUT) {
+            throw new BadRequestException("Buổi tập chưa đạt thời lượng tối thiểu nên không ghi nhận feedback");
         }
         if (feedbackRepository.existsBySessionId(session.getId())) {
             throw new ConflictException("Buổi tập này đã có feedback");
@@ -81,7 +85,10 @@ public class FeedbackService {
                         ? RecommendationFeedbackStatus.COMPLETED : RecommendationFeedbackStatus.NOT_DONE);
             }
         }
-        return FeedbackResponse.from(feedbackRepository.save(f));
+        Feedback saved = feedbackRepository.save(f);
+        recommendationEventService.recordFeedbackSubmitted(user, session,
+                recommendation == null ? null : recommendation.getId());
+        return FeedbackResponse.from(saved);
     }
 
     @Transactional
@@ -94,7 +101,9 @@ public class FeedbackService {
         Feedback feedback = new Feedback();
         feedback.setRecommendation(recommendation);
         applyRecommendationFeedback(feedback, req);
-        return RecommendationFeedbackResponse.from(feedbackRepository.save(feedback));
+        RecommendationFeedbackResponse response = RecommendationFeedbackResponse.from(feedbackRepository.save(feedback));
+        recommendationEventService.recordFeedbackSubmitted(currentUser.get(), null, recommendationId);
+        return response;
     }
 
     @Transactional
@@ -104,7 +113,9 @@ public class FeedbackService {
         Feedback feedback = feedbackRepository.findByRecommendation_Id(recommendationId)
                 .orElseThrow(() -> new NotFoundException("Chưa có feedback cho gợi ý này"));
         applyRecommendationFeedback(feedback, req);
-        return RecommendationFeedbackResponse.from(feedback);
+        RecommendationFeedbackResponse response = RecommendationFeedbackResponse.from(feedback);
+        recommendationEventService.recordFeedbackSubmitted(currentUser.get(), null, recommendationId);
+        return response;
     }
 
     @Transactional(readOnly = true)
@@ -118,6 +129,7 @@ public class FeedbackService {
         long saved = recommendationRepository.count();
         long started = sessionRepository.countByRecommendationIsNotNull();
         long completed = sessionRepository.countByRecommendationIsNotNullAndStatus(WorkoutStatus.COMPLETED);
+        long eligibleSessions = sessionRepository.countByRecommendationIsNotNullAndStatusNot(WorkoutStatus.INVALID_WORKOUT);
 
         Map<String, Long> statuses = new LinkedHashMap<>();
         for (RecommendationFeedbackStatus status : RecommendationFeedbackStatus.values()) {
@@ -127,7 +139,7 @@ public class FeedbackService {
         for (Object[] row : feedbackRepository.countRecommendationReasons()) {
             reasons.put((String) row[0], (Long) row[1]);
         }
-        Double completionRate = started == 0 ? null : (double) completed / started;
+        Double completionRate = eligibleSessions == 0 ? null : (double) completed / eligibleSessions;
         return new FeedbackStatsResponse(saved, started, completed, statuses, reasons,
                 feedbackRepository.averageRecommendationSuitability(),
                 saved == 0 ? 0.0 : (double) started / saved, completionRate);

@@ -34,7 +34,7 @@ export default function Workouts() {
                   <Link to={`/workouts/${w.id}`}><b>Buổi tập #{w.id}</b></Link>
                   <p className="muted small">Bắt đầu {formatDateTime(w.startedAt)}{w.finishedAt ? `, kết thúc ${formatDateTime(w.finishedAt)}` : ''}</p>
                 </div>
-                <span className={`badge ${w.status === 'COMPLETED' ? 'badge-ok' : w.status === 'STARTED' ? 'badge-warn' : ''}`}>
+                <span className={`badge ${w.status === 'COMPLETED' ? 'badge-ok' : w.status === 'STARTED' ? 'badge-warn' : w.status === 'INVALID_WORKOUT' ? 'badge-off' : ''}`}>
                   {STATUS_LABEL[w.status]}
                 </span>
               </li>

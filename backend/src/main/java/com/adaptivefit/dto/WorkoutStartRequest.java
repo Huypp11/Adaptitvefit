@@ -5,6 +5,7 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
@@ -17,5 +18,7 @@ public record WorkoutStartRequest(
         @NotEmpty @Size(max = 10) List<@NotNull Long> exerciseIds,
         @Size(max = 10) List<@NotNull @Min(1) @Max(240) Integer> plannedMinutes,
         Boolean followRecommendation,
-        @Positive Long recommendationId
+        @Positive Long recommendationId,
+        @Pattern(regexp = "(recommendation:[0-9]+|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})")
+        String trackingId
 ) {}

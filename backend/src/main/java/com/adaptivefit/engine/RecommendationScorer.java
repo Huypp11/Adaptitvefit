@@ -40,6 +40,10 @@ public class RecommendationScorer {
         StrategyParams params = decision.params();
         int budget = state.freeTimeMin();
         if (params.maxDurationMin() != null) budget = Math.min(budget, params.maxDurationMin());
+        if ("TOO_TIRED".equals(profile.recentAbandonmentReason())
+                || "UNEXPECTED_WORK".equals(profile.recentAbandonmentReason())) {
+            budget = Math.min(budget, 15);
+        }
 
         Map<String, Integer> excluded = new LinkedHashMap<>();
         for (String k : List.of("location", "equipment", "time", "energy", "intensity", "intensity_conflict", "recovery")) {
@@ -61,6 +65,7 @@ public class RecommendationScorer {
         scored.sort(Comparator.comparingDouble(ScoredExercise::score).reversed().thenComparing(ScoredExercise::name));
         List<ScoredExercise> top = diversify(scored, byId, Math.max(1, topN));
         List<RecommendationResult.PlanItem> plan = buildPlan(top, byId, budget);
+        top = syncWithPlan(top, plan, byId, state, profile, decision);
 
         String message = top.isEmpty() ? emptyMessage(excluded, budget) : null;
         return new RecommendationResult(budget, top, plan, excluded, message);
@@ -69,11 +74,13 @@ public class RecommendationScorer {
     // ---------- (1) loc cung ----------
     private String hardFilter(ExerciseCandidate e, UserState s, ProfileContext p, StrategyParams params, int budget) {
         if (!locationOk(e.location(), p.location())) return "location";
-        if (!equipmentOk(e.equipment(), p.equipment())) return "equipment";
+        String equipment = "NO_EQUIPMENT".equals(p.recentAbandonmentReason()) ? "NONE" : p.equipment();
+        if (!equipmentOk(e.equipment(), equipment)) return "equipment";
         if (e.durationMin() > budget) return "time";
         if (e.energyRequirement() > s.energy()) return "energy";
         int rank = StrategyParams.intensityRank(e.intensity());
         int userMaxRank = StrategyParams.intensityRank(p.maxExerciseIntensity());
+        if ("TOO_TIRED".equals(p.recentAbandonmentReason())) userMaxRank = Math.min(userMaxRank, 1);
         int strategyMaxRank = params.maxIntensity() == null ? Integer.MAX_VALUE
                 : StrategyParams.intensityRank(params.maxIntensity());
         int effectiveMaxRank = Math.min(userMaxRank, strategyMaxRank);
@@ -115,6 +122,7 @@ public class RecommendationScorer {
 
         double total = weights.time() * time + weights.energy() * energy + weights.goal() * goal
                 + weights.difficulty() * difficulty + weights.preference() * preference + weights.recovery() * recovery;
+        total = Math.min(1.0, total + recentAbandonmentBonus(e, planned, p));
 
         ScoredExercise.Breakdown b = new ScoredExercise.Breakdown(r3(time), r3(energy), r3(goal),
                 r3(difficulty), r3(preference), r3(recovery));
@@ -165,48 +173,146 @@ public class RecommendationScorer {
         };
     }
 
+    /**
+     * Ly do hien cho nguoi dung: truoc het la ly do RIENG cua bai nay (nang luong, muc tieu, do kho, so thich),
+     * sau do moi den cac dieu kien da kiem tra (dia diem, dung cu, cuong do, thoi gian) vi bai nao qua loc cung
+     * cung thoa chung. Khong cat bot de cac dieu kien da kiem tra luon con trong danh sach.
+     */
     private List<String> reasons(ScoredExercise.Breakdown b, ExerciseCandidate e, UserState s,
                                  ProfileContext p, int planned, StrategyDecision d) {
         List<String> r = new ArrayList<>();
+        if (b.energy() >= 0.85) r.add("Hợp với mức năng lượng hiện tại (" + s.energy() + "/5)");
+        if (b.goal() >= 0.99) r.add("Đúng mục tiêu của bạn");
+        if (b.recovery() >= 0.99 && d.code().equals("RECOVERY")) r.add("Phù hợp để phục hồi");
+        if (b.preference() >= 0.99) r.add("Đúng dạng bài bạn thích tập");
+        if (b.difficulty() >= 0.85) r.add("Độ khó vừa sức");
+        if ("TOO_TIRED".equals(p.recentAbandonmentReason())) {
+            r.add("Ưu tiên bài nhẹ và ngắn hơn sau phản hồi buổi trước");
+        } else if ("NO_EQUIPMENT".equals(p.recentAbandonmentReason())) {
+            r.add("Ưu tiên bài không cần dụng cụ sau phản hồi buổi trước");
+        } else if ("UNEXPECTED_WORK".equals(p.recentAbandonmentReason())) {
+            r.add("Ưu tiên buổi ngắn hơn sau phản hồi buổi trước");
+        }
+        if (r.isEmpty()) r.add("Được xếp hạng cao trong các bài còn phù hợp");
+
+        String where = locationLabel(p.location());
         if ("ANY".equalsIgnoreCase(e.location())) {
-            r.add("Bài tập linh hoạt địa điểm, phù hợp với lựa chọn " + p.location());
+            r.add("Bài tập linh hoạt địa điểm, phù hợp với lựa chọn " + where);
         } else {
-            r.add("Đúng địa điểm bạn đã chọn (" + p.location() + ")");
+            r.add("Đúng địa điểm bạn đã chọn (" + where + ")");
         }
         if (e.equipment() == null || e.equipment().isBlank() || "NONE".equalsIgnoreCase(e.equipment())) {
             r.add("Không cần dụng cụ bổ sung");
         } else {
-            r.add("Có đủ dụng cụ cần thiết: " + e.equipment());
+            r.add("Có đủ dụng cụ cần thiết: " + equipmentLabel(e.equipment()));
         }
-        r.add("Cường độ " + e.intensity() + " không vượt mức tối đa bạn chọn (" + p.maxExerciseIntensity() + ")");
+        r.add("Cường độ " + intensityLabel(e.intensity()) + " không vượt mức tối đa bạn chọn ("
+                + intensityLabel(p.maxExerciseIntensity()) + ")");
         r.add("Thời lượng " + planned + " phút nằm trong quỹ " + s.freeTimeMin() + " phút hôm nay");
-        if (b.time() >= 0.99) r.add("Vừa với " + planned + " phút bạn có hôm nay");
-        if (b.energy() >= 0.85) r.add("Hợp với mức năng lượng hiện tại (" + s.energy() + "/5)");
-        if (b.goal() >= 0.99) r.add("Đúng mục tiêu của bạn");
-        if (b.recovery() >= 0.99 && d.code().equals("RECOVERY")) r.add("Phù hợp để phục hồi");
-        if (b.preference() >= 0.8) r.add("Hợp nơi tập và sở thích của bạn");
-        if (b.difficulty() >= 0.85) r.add("Độ khó vừa sức");
-        if (b.energy() < 0.85 && b.goal() < 0.99 && b.recovery() < 0.99
-                && b.preference() < 0.8 && b.difficulty() < 0.85) {
-            r.add("Được xếp hạng cao trong các bài còn phù hợp");
+        return r;
+    }
+
+    private double recentAbandonmentBonus(ExerciseCandidate exercise, int planned, ProfileContext profile) {
+        return switch (profile.recentAbandonmentReason() == null ? "" : profile.recentAbandonmentReason()) {
+            case "TOO_TIRED" -> (StrategyParams.intensityRank(exercise.intensity()) == 1 ? 0.08 : 0.0)
+                    + (planned <= 15 ? 0.05 : 0.0);
+            case "UNEXPECTED_WORK" -> planned <= 15 ? 0.12 : 0.0;
+            default -> 0.0;
+        };
+    }
+
+    private static String locationLabel(String code) {
+        if (code == null) return "";
+        return switch (code.toUpperCase(java.util.Locale.ROOT)) {
+            case "HOME" -> "ở nhà";
+            case "GYM" -> "phòng tập";
+            case "OUTDOOR" -> "ngoài trời";
+            case "ANY" -> "linh hoạt";
+            default -> code;
+        };
+    }
+
+    private static String intensityLabel(String code) {
+        if (code == null) return "";
+        return switch (code.toUpperCase(java.util.Locale.ROOT)) {
+            case "LOW" -> "nhẹ";
+            case "MEDIUM" -> "vừa";
+            case "HIGH" -> "nặng";
+            default -> code;
+        };
+    }
+
+    private static final Map<String, String> EQUIPMENT_LABELS = Map.of(
+            "yoga_mat", "thảm tập", "jump_rope", "dây nhảy", "bicycle", "xe đạp",
+            "stable_step", "bậc hoặc ghế chắc chắn", "stable_surface", "mặt phẳng chắc chắn");
+
+    private static String equipmentLabel(String required) {
+        List<String> parts = new ArrayList<>();
+        for (String code : required.split(",")) {
+            String c = code.trim();
+            if (c.isEmpty() || c.equalsIgnoreCase("none")) continue;
+            parts.add(EQUIPMENT_LABELS.getOrDefault(c.toLowerCase(java.util.Locale.ROOT), c));
         }
-        return r.size() > 6 ? new ArrayList<>(r.subList(0, 6)) : r;
+        return String.join(", ", parts);
     }
 
     // ---------- (3) chon top-N da dang va buoc tap ----------
+    /** Toi thieu so bai de goi y khi con du ung vien, du cac bai cung dang van dong. */
+    private static final int MIN_ITEMS = 2;
+
+    /**
+     * Chon top-N: uu tien khac nhom co VA khac dang van dong (vd "Hit dat" va "Hit dat tay rong" la mot dang).
+     * Chi khi chua du MIN_ITEMS moi cho phep lap lai dang van dong. Co the tra ve it hon N bai.
+     */
     private List<ScoredExercise> diversify(List<ScoredExercise> ranked, Map<Long, ExerciseCandidate> byId, int topN) {
         List<ScoredExercise> picked = new ArrayList<>();
         Set<String> groups = new HashSet<>();
+        Set<String> families = new HashSet<>();
         for (ScoredExercise s : ranked) {
             if (picked.size() >= topN) break;
             String g = String.valueOf(byId.get(s.exerciseId()).muscleGroup());
-            if (groups.add(g)) picked.add(s);
+            String f = family(s.name());
+            if (!groups.contains(g) && !families.contains(f)) {
+                groups.add(g);
+                families.add(f);
+                picked.add(s);
+            }
         }
         for (ScoredExercise s : ranked) {
             if (picked.size() >= topN) break;
+            if (picked.contains(s)) continue;
+            if (families.add(family(s.name()))) picked.add(s);
+        }
+        for (ScoredExercise s : ranked) {
+            if (picked.size() >= Math.min(topN, MIN_ITEMS)) break;
             if (!picked.contains(s)) picked.add(s);
         }
         return picked;
+    }
+
+    /** Dang van dong suy ra tu hai tu dau cua ten bai (chua co cot rieng trong catalog). */
+    static String family(String name) {
+        String[] t = TextUtil.normalize(name).split(" ");
+        if (t.length == 0 || t[0].isEmpty()) return "";
+        return t.length == 1 ? t[0] : t[0] + " " + t[1];
+    }
+
+    /**
+     * Dua thoi luong va ly do cua tung bai ve dung so phut trong ke hoach de the bai, ke hoach va nut bat dau
+     * cung mot con so. Bai khong nam trong ke hoach giu thoi luong rieng cua no. Thu hang va diem khong doi.
+     */
+    private List<ScoredExercise> syncWithPlan(List<ScoredExercise> top, List<RecommendationResult.PlanItem> plan,
+                                              Map<Long, ExerciseCandidate> byId, UserState s, ProfileContext p,
+                                              StrategyDecision d) {
+        Map<Long, Integer> planned = new LinkedHashMap<>();
+        for (RecommendationResult.PlanItem item : plan) planned.put(item.exerciseId(), item.plannedMin());
+        List<ScoredExercise> out = new ArrayList<>();
+        for (ScoredExercise item : top) {
+            int minutes = planned.getOrDefault(item.exerciseId(), item.plannedMin());
+            out.add(new ScoredExercise(item.exerciseId(), item.name(), minutes, item.score(), item.breakdown(),
+                    reasons(item.breakdown(), byId.get(item.exerciseId()), s, p, minutes, d)));
+        }
+        return out;
     }
 
     /** Xep du so bai theo thoi luong toi thieu truoc, roi chia phan thoi gian con thua cho cac bai theo thu tu xep hang. */

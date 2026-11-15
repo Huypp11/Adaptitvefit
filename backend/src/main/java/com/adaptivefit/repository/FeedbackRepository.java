@@ -6,6 +6,7 @@ import com.adaptivefit.entity.WorkoutStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.domain.Pageable;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -47,4 +48,19 @@ public interface FeedbackRepository extends JpaRepository<Feedback, Long> {
     List<Feedback> findWorkoutFeedbackSince(@Param("userId") Long userId,
                                             @Param("status") WorkoutStatus status,
                                             @Param("since") LocalDateTime since);
+
+    @Query("""
+            select f.notCompletedReason from Feedback f join f.session s
+            where s.user.id = :userId and s.status = :status
+              and s.finishedAt >= :since and f.notCompletedReason is not null
+              and s.finishedAt < :until
+            order by f.createdAt desc
+            """)
+    List<String> findRecentAbandonmentReasons(@Param("userId") Long userId,
+                                              @Param("status") WorkoutStatus status,
+                                              @Param("since") LocalDateTime since,
+                                              @Param("until") LocalDateTime until,
+                                              Pageable pageable);
+
+    Optional<Feedback> findBySession_Id(Long sessionId);
 }

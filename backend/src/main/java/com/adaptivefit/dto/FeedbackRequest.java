@@ -9,5 +9,5 @@ public record FeedbackRequest(
         @Min(1) @Max(5) Integer fatigue,
         @Min(1) @Max(5) Integer satisfaction,
         Boolean liked,
-        @Pattern(regexp = "NO_TIME|TOO_TIRED|TOO_DIFFICULT|DISLIKE|UNEXPECTED_WORK|OTHER") String notCompletedReason
+        @Pattern(regexp = "NO_TIME|TOO_TIRED|TOO_DIFFICULT|NO_EQUIPMENT|DISLIKE|UNEXPECTED_WORK|OTHER") String notCompletedReason
 ) {}

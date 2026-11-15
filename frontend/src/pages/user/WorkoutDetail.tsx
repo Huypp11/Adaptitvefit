@@ -3,9 +3,10 @@ import { Link, useParams } from 'react-router-dom';
 import { feedbackApi, profileApi, workoutApi } from '../../api/endpoints';
 import { orNull, parseError } from '../../api/errors';
 import type { Workout } from '../../api/types';
+import AbandonReasonDialog from '../../components/AbandonReasonDialog';
 import Rating from '../../components/Rating';
 import Toggle from '../../components/Toggle';
-import { INTENSITIES, MISSED_REASONS, STATUS_LABEL, labelOf } from '../../lib/labels';
+import { FEEDBACK_REASONS, INTENSITIES, STATUS_LABEL, labelOf } from '../../lib/labels';
 import { formatDateTime } from '../../lib/dates';
 import { estimateKcal, metFor } from '../../lib/calories';
 
@@ -16,6 +17,7 @@ export default function WorkoutDetail() {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [weightKg, setWeightKg] = useState<number | null>(null);
+  const [confirmAbandon, setConfirmAbandon] = useState(false);
 
   useEffect(() => {
     orNull(profileApi.get()).then((p) => setWeightKg(p ? p.weightKg : null)).catch(() => undefined);
@@ -26,10 +28,11 @@ export default function WorkoutDetail() {
     workoutApi.get(workoutId).then(setWorkout).catch((e) => setError(parseError(e).message));
   }, [workoutId]);
 
-  async function finish(kind: 'complete' | 'abandon') {
+  async function finish(kind: 'complete' | 'abandon', reason?: string) {
     setError(''); setBusy(true);
     try {
-      setWorkout(await (kind === 'complete' ? workoutApi.complete(workoutId) : workoutApi.abandon(workoutId)));
+      setWorkout(await (kind === 'complete' ? workoutApi.complete(workoutId) : workoutApi.abandon(workoutId, reason)));
+      setConfirmAbandon(false);
     } catch (e) {
       setError(parseError(e).message);
     } finally {
@@ -53,7 +56,7 @@ export default function WorkoutDetail() {
       <header className="page-head">
         <h1>Buổi tập #{workout.id}</h1>
         <p className="muted">
-          <span className={`badge ${workout.status === 'COMPLETED' ? 'badge-ok' : workout.status === 'STARTED' ? 'badge-warn' : ''}`}>
+          <span className={`badge ${workout.status === 'COMPLETED' ? 'badge-ok' : workout.status === 'STARTED' ? 'badge-warn' : workout.status === 'INVALID_WORKOUT' ? 'badge-off' : ''}`}>
             {STATUS_LABEL[workout.status]}
           </span>{' '}
           Bắt đầu {formatDateTime(workout.startedAt)} · Dự kiến {totalMin} phút{totalKcal !== null ? ` · ước tính ${totalKcal} kcal` : ''}
@@ -80,11 +83,19 @@ export default function WorkoutDetail() {
         <div className="row">
           <Link className="btn btn-primary" to={`/workouts/${workout.id}/play`}>Bắt đầu tập</Link>
           <button className="btn" disabled={busy} onClick={() => finish('complete')}>Đánh dấu đã hoàn thành</button>
-          <button className="btn btn-danger" disabled={busy} onClick={() => finish('abandon')}>Huỷ buổi tập</button>
+          <button className="btn btn-danger" disabled={busy} onClick={() => setConfirmAbandon(true)}>Huỷ buổi tập</button>
         </div>
       ) : (
-        <FeedbackForm workout={workout} />
+        workout.status === 'INVALID_WORKOUT' ? (
+          <p className="notice notice-warn" role="status">
+            Buổi tập chưa đạt ngưỡng tối thiểu 3 phút và 30% thời lượng dự kiến; không được tính là hoàn thành.
+          </p>
+        ) : workout.notCompletedReason ? (
+          <p className="notice notice-ok" role="status">Đã ghi nhận lý do dừng buổi tập: {labelOf(FEEDBACK_REASONS, workout.notCompletedReason)}.</p>
+        ) : <FeedbackForm workout={workout} />
       )}
+      {confirmAbandon && <AbandonReasonDialog busy={busy} onChoose={(reason) => finish('abandon', reason)}
+                                               onSkip={() => finish('abandon')} />}
     </div>
   );
 }
@@ -163,7 +174,7 @@ function FeedbackForm({ workout }: { workout: Workout }) {
           <label htmlFor="reason">Lý do</label>
           <select id="reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)}>
             <option value="">Chọn lý do</option>
-            {MISSED_REASONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            {FEEDBACK_REASONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           {fields.notCompletedReason && <p className="err">{fields.notCompletedReason}</p>}
         </div>

@@ -52,6 +52,55 @@ public class UserStateService {
                 () -> buildSnapshot(user, today));
     }
 
+    public UserState profileFallback(User user, int availableMinutes) {
+        LocalDate date = LocalDate.now();
+        LocalDate earliest = user.getCreatedAt().toLocalDate();
+        LocalDate lookbackStart = date.minusDays(LOOKBACK_DAYS - 1L);
+        LocalDate windowStart = earliest.isAfter(lookbackStart) ? earliest : lookbackStart;
+        List<DailyCheckin> checkins = checkinRepository.findByUserIdAndCheckinDateBetweenOrderByCheckinDateDesc(
+                user.getId(), windowStart, date);
+        List<WorkoutSession> sessions = sessionRepository.findByUserIdAndStatusAndFinishedAtGreaterThanEqual(
+                user.getId(), WorkoutStatus.COMPLETED, windowStart.atStartOfDay());
+
+        Set<LocalDate> exercised = new HashSet<>();
+        checkins.stream().filter(c -> Boolean.TRUE.equals(c.getExercisedToday()))
+                .map(DailyCheckin::getCheckinDate).forEach(exercised::add);
+        sessions.stream().map(s -> s.getFinishedAt().toLocalDate()).forEach(exercised::add);
+
+        int missed = 0;
+        LocalDate day = date;
+        while (!exercised.contains(day) && !day.isBefore(windowStart)) {
+            missed++;
+            day = day.minusDays(1);
+        }
+        int frequency = (int) exercised.stream()
+                .filter(d -> !d.isBefore(date.minusDays(6)) && !d.isAfter(date)).count();
+        int observedDays = (int) Math.min(7, ChronoUnit.DAYS.between(earliest, date) + 1);
+        Map<LocalDate, Integer> recentDurationByDay = new HashMap<>();
+        Set<LocalDate> checkinDurationDays = new HashSet<>();
+        for (DailyCheckin checkin : checkins) {
+            if (Boolean.TRUE.equals(checkin.getExercisedToday()) && checkin.getDurationMin() != null
+                    && !checkin.getCheckinDate().isBefore(date.minusDays(6))) {
+                recentDurationByDay.put(checkin.getCheckinDate(), checkin.getDurationMin());
+                checkinDurationDays.add(checkin.getCheckinDate());
+            }
+        }
+        for (WorkoutSession session : sessions) {
+            LocalDate workoutDate = session.getFinishedAt().toLocalDate();
+            if (workoutDate.isBefore(date.minusDays(6)) || checkinDurationDays.contains(workoutDate)) continue;
+            int minutes = (int) Math.max(1, Math.min(300,
+                    Duration.between(session.getStartedAt(), session.getFinishedAt()).toMinutes()));
+            recentDurationByDay.merge(workoutDate, minutes, (total, added) -> Math.min(300, total + added));
+        }
+        int historyBudget = recentDurationByDay.isEmpty() ? availableMinutes
+                : Math.max(5, (int) Math.round(recentDurationByDay.values().stream()
+                .mapToInt(Integer::intValue).average().orElse(availableMinutes)));
+        int freeTime = Math.min(availableMinutes, historyBudget);
+        return new UserState(7.0, 3, 3, 3, 3, freeTime, exercised.contains(date),
+                missed, frequency, HistoryRisk.level(missed, frequency, observedDays),
+                UserState.RISK_SOURCE_HISTORY);
+    }
+
     private Snapshot buildSnapshot(User user, DailyCheckin today) {
         PerformanceTiming.setUserId(user.getId());
         LocalDate date = today.getCheckinDate();

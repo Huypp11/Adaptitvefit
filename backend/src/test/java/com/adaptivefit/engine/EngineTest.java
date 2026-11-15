@@ -200,6 +200,34 @@ class EngineTest {
     }
 
     @Test
+    void recentFatigueFeedbackLimitsIntensityAndRecommendedDuration() {
+        ExerciseCandidate light = ex(1, "Giãn cơ", 5, 30, 1, "LOW", "NONE", "HOME", "back", "STAY_ACTIVE", 1, true);
+        ExerciseCandidate hard = ex(2, "Bài nặng", 5, 30, 3, "HIGH", "NONE", "HOME", "legs", "STAY_ACTIVE", 3, false);
+        ProfileContext tired = new ProfileContext("INTERMEDIATE", "STAY_ACTIVE", "HOME", "", "", "HIGH", "TOO_TIRED");
+
+        RecommendationResult result = new RecommendationScorer().recommend(
+                state(7, 3, 5, 30, 0, 3), tired, strategy("NORMAL", ""), List.of(hard, light), 3);
+
+        assertEquals(List.of(1L), result.plan().stream().map(RecommendationResult.PlanItem::exerciseId).toList());
+        assertTrue(result.budgetMinutes() <= 15);
+        assertTrue(result.items().get(0).reasons().stream().anyMatch(reason -> reason.contains("Ưu tiên bài nhẹ")));
+    }
+
+    @Test
+    void recentNoEquipmentFeedbackExcludesExercisesRequiringGear() {
+        ExerciseCandidate bodyweight = ex(1, "Squat tay không", 5, 15, 2, "MEDIUM", "NONE", "HOME", "legs", "STAY_ACTIVE", 2, false);
+        ExerciseCandidate equipped = ex(2, "Tập tạ", 5, 15, 2, "MEDIUM", "dumbbells", "HOME", "arms", "STAY_ACTIVE", 2, false);
+        ProfileContext noEquipment = new ProfileContext("INTERMEDIATE", "STAY_ACTIVE", "HOME", "dumbbells", "", "HIGH", "NO_EQUIPMENT");
+
+        RecommendationResult result = new RecommendationScorer().recommend(
+                state(7, 3, 3, 20, 0, 3), noEquipment, strategy("NORMAL", ""),
+                List.of(equipped, bodyweight), 3);
+
+        assertEquals(List.of(1L), result.items().stream().map(ScoredExercise::exerciseId).toList());
+        assertTrue(result.items().get(0).reasons().stream().anyMatch(reason -> reason.contains("không cần dụng cụ")));
+    }
+
+    @Test
     void planFitsBudgetAndPicksDistinctMuscleGroups() {
         List<ExerciseCandidate> all = List.of(
                 ex(1, "Chân 1", 10, 20, 2, "MEDIUM", "NONE", "HOME", "legs", "STAY_ACTIVE", 2, false),
@@ -225,6 +253,61 @@ class EngineTest {
         assertTrue(none.items().isEmpty());
         assertTrue(none.message() != null && !none.message().isBlank());
         assertTrue(none.plan().isEmpty());
+    }
+
+    @Test
+    void itemMinutesMatchPlanMinutesAndReasonsStayConsistent() {
+        List<ExerciseCandidate> all = List.of(
+                ex(1, "Hít đất", 5, 20, 2, "MEDIUM", "NONE", "HOME", "chest", "STAY_ACTIVE", 2, false),
+                ex(2, "Squat tay không", 5, 20, 2, "MEDIUM", "NONE", "HOME", "legs", "STAY_ACTIVE", 2, false),
+                ex(3, "Gập bụng", 5, 15, 2, "MEDIUM", "NONE", "HOME", "core", "STAY_ACTIVE", 2, false));
+        RecommendationResult r = new RecommendationScorer().recommend(state(7, 3, 3, 30, 0, 3), PROFILE,
+                strategy("NORMAL", ""), all, 3);
+        int total = r.plan().stream().mapToInt(RecommendationResult.PlanItem::plannedMin).sum();
+        assertTrue(total <= r.budgetMinutes());
+        for (RecommendationResult.PlanItem planned : r.plan()) {
+            ScoredExercise item = r.items().stream().filter(i -> i.exerciseId() == planned.exerciseId())
+                    .findFirst().orElseThrow();
+            assertEquals(planned.plannedMin(), item.plannedMin());
+            assertTrue(item.reasons().stream().anyMatch(x -> x.contains("Thời lượng " + planned.plannedMin() + " phút")));
+        }
+    }
+
+    @Test
+    void doesNotPickTwoExercisesOfTheSameFamily() {
+        List<ExerciseCandidate> all = List.of(
+                ex(1, "Hít đất", 5, 20, 2, "MEDIUM", "NONE", "HOME", "chest", "STAY_ACTIVE", 2, false),
+                ex(2, "Hít đất tay rộng", 5, 15, 2, "MEDIUM", "NONE", "HOME", "chest", "STAY_ACTIVE", 2, false),
+                ex(3, "Squat tay không", 5, 20, 2, "MEDIUM", "NONE", "HOME", "legs", "STAY_ACTIVE", 2, false));
+        RecommendationResult r = new RecommendationScorer().recommend(state(7, 3, 3, 30, 0, 3), PROFILE,
+                strategy("NORMAL", ""), all, 3);
+        assertEquals(2, r.items().size());
+        assertFalse(r.items().stream().anyMatch(i -> i.exerciseId() == 2L));
+    }
+
+    @Test
+    void repeatsAFamilyOnlyToReachTheMinimumNumberOfItems() {
+        List<ExerciseCandidate> all = List.of(
+                ex(1, "Hít đất", 5, 20, 2, "MEDIUM", "NONE", "HOME", "chest", "STAY_ACTIVE", 2, false),
+                ex(2, "Hít đất tay rộng", 5, 15, 2, "MEDIUM", "NONE", "HOME", "chest", "STAY_ACTIVE", 2, false));
+        RecommendationResult r = new RecommendationScorer().recommend(state(7, 3, 3, 30, 0, 3), PROFILE,
+                strategy("NORMAL", ""), all, 3);
+        assertEquals(2, r.items().size());
+    }
+
+    @Test
+    void reasonsShowSpecificPointsFirstAndNeverLeakRawCodes() {
+        ExerciseCandidate mat = ex(1, "Cầu hông", 5, 15, 2, "MEDIUM", "yoga_mat", "HOME", "legs", "STAY_ACTIVE", 2, false);
+        ProfileContext p = new ProfileContext("INTERMEDIATE", "STAY_ACTIVE", "HOME", "thảm", "", "MEDIUM");
+        RecommendationResult r = new RecommendationScorer().recommend(state(7, 3, 4, 30, 0, 3), p,
+                strategy("NORMAL", ""), List.of(mat), 3);
+        List<String> reasons = r.items().get(0).reasons();
+        assertTrue(reasons.get(0).contains("năng lượng") || reasons.get(0).contains("mục tiêu"));
+        for (String reason : reasons) {
+            assertFalse(reason.contains("HOME") || reason.contains("MEDIUM") || reason.contains("yoga_mat"), reason);
+        }
+        assertTrue(reasons.stream().anyMatch(x -> x.contains("địa điểm")));
+        assertTrue(reasons.stream().anyMatch(x -> x.contains("mức tối đa bạn chọn")));
     }
 
     @Test

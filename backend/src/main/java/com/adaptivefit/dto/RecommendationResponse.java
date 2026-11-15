@@ -8,7 +8,7 @@ import java.util.List;
 public record RecommendationResponse(Long recommendationId, String interactionStatus,
                                      RecommendationFeedbackResponse feedback, LocalDateTime createdAt,
                                      Strategy strategy, State state, RiskInfo risk,
-                                     RecommendationResult recommendation) {
+                                     RecommendationResult recommendation, String mode, String trackingId) {
 
     public record Strategy(String code, String description, List<String> reasons) {}
 

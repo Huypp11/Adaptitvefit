@@ -8,13 +8,13 @@ import java.util.List;
 
 public record WorkoutResponse(
         Long id, String status, String interventionCode, LocalDateTime startedAt,
-        LocalDateTime finishedAt, List<Item> exercises
+        LocalDateTime finishedAt, List<Item> exercises, String notCompletedReason
 ) {
     public record Item(Long exerciseId, String name, Integer orderNo, Integer plannedMin,
                        String intensity, String instructions, Double met,
                        List<String> steps, List<String> media, String tips) {}
 
-    public static WorkoutResponse from(WorkoutSession s) {
+    public static WorkoutResponse from(WorkoutSession s, String notCompletedReason) {
         List<Item> items = s.getExercises().stream()
                 .map(x -> new Item(x.getExercise().getId(), x.getExercise().getName(), x.getOrderNo(),
                         x.getPlannedMin(), x.getExercise().getIntensity(), x.getExercise().getInstructions(),
@@ -22,6 +22,6 @@ public record WorkoutResponse(
                         TextLists.split(x.getExercise().getMediaUrls()), x.getExercise().getTips()))
                 .toList();
         return new WorkoutResponse(s.getId(), s.getStatus().name(), s.getInterventionCode(),
-                s.getStartedAt(), s.getFinishedAt(), items);
+                s.getStartedAt(), s.getFinishedAt(), items, notCompletedReason);
     }
 }

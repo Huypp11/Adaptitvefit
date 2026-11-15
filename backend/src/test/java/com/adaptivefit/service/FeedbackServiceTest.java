@@ -8,6 +8,7 @@ import com.adaptivefit.entity.RecommendationHistory;
 import com.adaptivefit.entity.User;
 import com.adaptivefit.entity.WorkoutSession;
 import com.adaptivefit.entity.WorkoutStatus;
+import com.adaptivefit.exception.BadRequestException;
 import com.adaptivefit.exception.ConflictException;
 import com.adaptivefit.exception.NotFoundException;
 import com.adaptivefit.repository.FeedbackRepository;
@@ -33,6 +34,7 @@ class FeedbackServiceTest {
     @Mock private WorkoutSessionRepository sessionRepository;
     @Mock private RecommendationHistoryRepository recommendationRepository;
     @Mock private CurrentUserService currentUser;
+    @Mock private RecommendationEventService recommendationEventService;
     @InjectMocks private FeedbackService feedbackService;
 
     private User user;
@@ -73,6 +75,19 @@ class FeedbackServiceTest {
     }
 
     @Test
+    void rejectsFeedbackForInvalidWorkout() {
+        when(currentUser.get()).thenReturn(user);
+        WorkoutSession session = new WorkoutSession();
+        session.setId(11L);
+        session.setStatus(WorkoutStatus.INVALID_WORKOUT);
+        when(sessionRepository.findByIdAndUserId(11L, 7L)).thenReturn(Optional.of(session));
+
+        assertThrows(BadRequestException.class,
+                () -> feedbackService.create(new FeedbackRequest(11L, false, null, null, null, null, "TOO_TIRED")));
+        verify(feedbackRepository, never()).save(any());
+    }
+
+    @Test
     void rejectsDuplicateCreateAndRequiresExplicitUpdate() {
         when(currentUser.get()).thenReturn(user);
         when(recommendationRepository.findByIdAndUserId(42L, 7L)).thenReturn(Optional.of(recommendation));
@@ -103,10 +118,11 @@ class FeedbackServiceTest {
     }
 
     @Test
-    void reportsStatisticsUsingSavedRecommendationsAndLinkedWorkoutsAsDenominators() {
+    void reportsStatisticsUsingSavedRecommendationsAndValidLinkedWorkoutsAsDenominators() {
         when(recommendationRepository.count()).thenReturn(4L);
         when(sessionRepository.countByRecommendationIsNotNull()).thenReturn(2L);
         when(sessionRepository.countByRecommendationIsNotNullAndStatus(WorkoutStatus.COMPLETED)).thenReturn(1L);
+        when(sessionRepository.countByRecommendationIsNotNullAndStatusNot(WorkoutStatus.INVALID_WORKOUT)).thenReturn(2L);
         when(feedbackRepository.countByRecommendationStatus(any())).thenReturn(0L);
         when(feedbackRepository.countByRecommendationStatus(RecommendationFeedbackStatus.COMPLETED)).thenReturn(1L);
         when(feedbackRepository.countRecommendationReasons()).thenReturn(

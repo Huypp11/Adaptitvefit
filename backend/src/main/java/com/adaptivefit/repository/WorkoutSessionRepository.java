@@ -22,6 +22,8 @@ public interface WorkoutSessionRepository extends JpaRepository<WorkoutSession, 
 
     long countByRecommendationIsNotNullAndStatus(WorkoutStatus status);
 
+    long countByRecommendationIsNotNullAndStatusNot(WorkoutStatus status);
+
     boolean existsByUserIdAndStatus(Long userId, WorkoutStatus status);
 
     Page<WorkoutSession> findByUserId(Long userId, Pageable pageable);

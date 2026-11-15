@@ -10,11 +10,13 @@ const userLinks = [
   { to: '/workouts', label: 'Buổi tập của tôi' },
   { to: '/progress', label: 'Tiến độ' },
   { to: '/profile', label: 'Hồ sơ' },
+  { to: '/recommendation-data', label: 'Dữ liệu & quyền riêng tư' },
 ];
 
 const adminLinks = [
   { to: '/admin/exercises', label: 'Quản lý bài tập', end: false },
   { to: '/admin/interventions', label: 'Quy tắc can thiệp', end: false },
+  { to: '/admin/recommendation-analytics', label: 'Đánh giá gợi ý', end: false },
 ];
 
 export default function AppLayout() {

@@ -7,6 +7,9 @@ import java.util.Map;
 /** Chon chien luoc can thiep: quy tac dung dau tien (theo do uu tien) quyet dinh. Khong dung LLM. */
 public class InterventionEngine {
 
+    /** Chua co quy tac giam tai/thu thach nao khop: noi dung dung su that, khong khang dinh "khong co van de". */
+    static final String NO_RULE_TRIGGERED = "Chưa có quy tắc điều chỉnh nào được kích hoạt với trạng thái hôm nay";
+
     public StrategyDecision decide(UserState state, List<RuleDef> rules) {
         return decide(state, rules, "HIGH");
     }
@@ -36,7 +39,7 @@ public class InterventionEngine {
                     continue;
                 }
                 List<String> reasons = expr.explain(g, facts);
-                if (reasons.isEmpty()) reasons = List.of("Không có dấu hiệu cần điều chỉnh");
+                if (reasons.isEmpty()) reasons = List.of(NO_RULE_TRIGGERED);
                 reasons = new java.util.ArrayList<>(reasons);
                 reasons.addAll(deferredReasons);
                 return new StrategyDecision(r.code(), r.description(), reasons, params);
@@ -44,12 +47,12 @@ public class InterventionEngine {
         }
         if (!deferredReasons.isEmpty()) {
             StrategyDecision fallback = new StrategyDecision("NORMAL", "Giữ kế hoạch bình thường.",
-                    List.of("Không có quy tắc nào cần điều chỉnh"), StrategyParams.none());
+                    List.of(NO_RULE_TRIGGERED), StrategyParams.none());
             List<String> reasons = new java.util.ArrayList<>(fallback.reasons());
             reasons.addAll(deferredReasons);
             return new StrategyDecision(fallback.code(), fallback.description(), reasons, fallback.params());
         }
         return new StrategyDecision("NORMAL", "Giữ kế hoạch bình thường.",
-                List.of("Không có quy tắc nào cần điều chỉnh"), StrategyParams.none());
+                List.of(NO_RULE_TRIGGERED), StrategyParams.none());
     }
 }

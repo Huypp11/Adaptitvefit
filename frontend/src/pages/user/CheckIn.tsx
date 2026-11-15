@@ -4,10 +4,19 @@ import { checkinApi, workoutApi } from '../../api/endpoints';
 import { orNull, parseError } from '../../api/errors';
 import type { Checkin, CheckinInput } from '../../api/types';
 import Field from '../../components/Field';
+import RangeField from '../../components/RangeField';
 import Rating from '../../components/Rating';
-import Toggle from '../../components/Toggle';
+import Segmented from '../../components/Segmented';
 import { datePart, toISODate } from '../../lib/dates';
 import { MISSED_REASONS, labelOf } from '../../lib/labels';
+
+type TrainingMode = 'DONE' | 'LATER' | 'SKIP';
+
+const TRAINING_MODES: { value: TrainingMode; label: string }[] = [
+  { value: 'DONE', label: 'Đã tập rồi' },
+  { value: 'LATER', label: 'Chưa tập, hôm nay sẽ tập' },
+  { value: 'SKIP', label: 'Hôm nay mình không tập' },
+];
 
 export default function CheckIn() {
   const navigate = useNavigate();
@@ -16,14 +25,14 @@ export default function CheckIn() {
   const [completedWorkoutDuration, setCompletedWorkoutDuration] = useState(1);
   const [loading, setLoading] = useState(true);
 
-  const [sleep, setSleep] = useState('');
+  const [sleep, setSleep] = useState<number | null>(null);
   const [stress, setStress] = useState<number | null>(null);
   const [energy, setEnergy] = useState<number | null>(null);
   const [mood, setMood] = useState<number | null>(null);
   const [motivation, setMotivation] = useState<number | null>(null);
-  const [freeTime, setFreeTime] = useState('');
-  const [exercised, setExercised] = useState(false);
-  const [duration, setDuration] = useState('');
+  const [freeTime, setFreeTime] = useState<number | null>(null);
+  const [mode, setMode] = useState<TrainingMode>('LATER');
+  const [duration, setDuration] = useState<number | null>(null);
   const [difficulty, setDifficulty] = useState<number | null>(null);
   const [reason, setReason] = useState('');
 
@@ -64,21 +73,25 @@ export default function CheckIn() {
     if (energy === null) missing.energy = 'Chọn một mức';
     if (mood === null) missing.mood = 'Chọn một mức';
     if (motivation === null) missing.motivation = 'Chọn một mức';
-    if (!completedWorkoutToday && exercised && !duration) missing.durationMin = 'Nhập số phút bạn đã tập';
+    if (sleep === null) missing.sleepHours = 'Chọn số giờ ngủ';
+    if (freeTime === null) missing.freeTimeMin = 'Chọn thời gian rảnh';
+    if (!completedWorkoutToday && mode === 'DONE' && duration === null) missing.durationMin = 'Chọn thời lượng buổi tập';
+    // Co ly do = chu dong khong tap; khong co ly do = chua tap luc check-in (se tap sau).
+    if (!completedWorkoutToday && mode === 'SKIP' && !reason) missing.missedReason = 'Chọn lý do để hệ thống điều chỉnh gợi ý';
     setFields(missing);
     if (Object.keys(missing).length > 0) return;
 
     const payload: CheckinInput = {
-      sleepHours: Number(sleep), stress: stress!, energy: energy!, mood: mood!,
-      motivation: motivation!, freeTimeMin: Number(freeTime),
-      exercisedToday: completedWorkoutToday || exercised,
+      sleepHours: sleep!, stress: stress!, energy: energy!, mood: mood!,
+      motivation: motivation!, freeTimeMin: freeTime!,
+      exercisedToday: completedWorkoutToday || mode === 'DONE',
     };
     if (completedWorkoutToday) {
       payload.durationMin = completedWorkoutDuration;
-    } else if (exercised) {
-      payload.durationMin = Number(duration);
+    } else if (mode === 'DONE') {
+      payload.durationMin = duration!;
       if (difficulty !== null) payload.difficulty = difficulty;
-    } else if (reason) {
+    } else if (mode === 'SKIP') {
       payload.missedReason = reason;
     }
 
@@ -113,7 +126,9 @@ export default function CheckIn() {
             <li>
               {existing.exercisedToday
                 ? <>Đã tập <b>{existing.durationMin} phút</b>{existing.difficulty ? <>, độ khó <b>{existing.difficulty}/5</b></> : null}</>
-                : <>Chưa tập{existing.missedReason ? <>, lý do: <b>{labelOf(MISSED_REASONS, existing.missedReason)}</b></> : null}</>}
+                : existing.missedReason
+                  ? <>Hôm nay không tập, lý do: <b>{labelOf(MISSED_REASONS, existing.missedReason)}</b></>
+                  : <>Chưa tập lúc check-in. Buổi tập hoàn thành trong ngày sẽ được tính tự động.</>}
             </li>
           </ul>
         </section>
@@ -137,14 +152,12 @@ export default function CheckIn() {
 
       <form className="panel stack-lg" onSubmit={submit}>
         <div className="form-grid">
-          <Field label="Đêm qua bạn ngủ bao nhiêu giờ?" htmlFor="sleep" error={fields.sleepHours}>
-            <input id="sleep" className="input" type="number" step="0.5" min="0" max="14" required
-                   value={sleep} onChange={(e) => setSleep(e.target.value)} />
-          </Field>
-          <Field label="Hôm nay bạn rảnh bao nhiêu phút?" htmlFor="free" error={fields.freeTimeMin}>
-            <input id="free" className="input" type="number" min="0" max="480" required
-                   value={freeTime} onChange={(e) => setFreeTime(e.target.value)} />
-          </Field>
+          <RangeField id="sleep" label="Đêm qua bạn ngủ bao nhiêu giờ?" value={sleep} min={0} max={14}
+                      step={0.5} suffix="giờ" lowLabel="0 giờ" highLabel="14 giờ"
+                      error={fields.sleepHours} onChange={setSleep} />
+          <RangeField id="free" label="Hôm nay bạn rảnh bao nhiêu phút?" value={freeTime} min={0} max={480}
+                      step={1} suffix="phút" lowLabel="0 phút" highLabel="480 phút"
+                      error={fields.freeTimeMin} onChange={setFreeTime} />
         </div>
 
         <div className="form-grid">
@@ -161,19 +174,22 @@ export default function CheckIn() {
           </p>
         ) : (
           <>
-            <Toggle label="Hôm nay bạn đã tập chưa?" value={exercised} onChange={setExercised} yes="Đã tập" no="Chưa tập" />
-            {exercised ? (
+            <Segmented label="Hôm nay bạn đã tập chưa?" value={mode} options={TRAINING_MODES} onChange={setMode} />
+            {mode === 'DONE' && (
               <div className="form-grid">
-                <Field label="Bạn đã tập bao nhiêu phút?" htmlFor="dur" error={fields.durationMin}>
-                  <input id="dur" className="input" type="number" min="1" max="300"
-                         value={duration} onChange={(e) => setDuration(e.target.value)} />
-                </Field>
+                <RangeField id="dur" label="Bạn đã tập bao nhiêu phút?" value={duration} min={1} max={300}
+                            step={1} suffix="phút" lowLabel="1 phút" highLabel="300 phút"
+                            error={fields.durationMin} onChange={setDuration} />
                 <Rating label="Độ khó buổi tập" low="Dễ" high="Rất khó" value={difficulty} onChange={setDifficulty} error={fields.difficulty} />
               </div>
-            ) : (
-              <Field label="Lý do chưa tập (không bắt buộc)" htmlFor="reason" error={fields.missedReason}>
+            )}
+            {mode === 'LATER' && (
+              <p className="muted small">Hệ thống sẽ gợi ý buổi tập cho hôm nay. Bạn không cần nhập lại sau khi tập xong.</p>
+            )}
+            {mode === 'SKIP' && (
+              <Field label="Vì sao hôm nay bạn không tập?" htmlFor="reason" error={fields.missedReason}>
                 <select id="reason" className="input" value={reason} onChange={(e) => setReason(e.target.value)}>
-                  <option value="">Không nêu</option>
+                  <option value="">Chọn lý do</option>
                   {MISSED_REASONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </Field>

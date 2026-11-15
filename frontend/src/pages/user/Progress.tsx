@@ -3,6 +3,7 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 import { aiApi, checkinApi, workoutApi } from '../../api/endpoints';
 import { parseError } from '../../api/errors';
 import type { Checkin, RiskPoint, WorkoutSummary } from '../../api/types';
+import RiskBadge from '../../components/RiskBadge';
 import { addDays, toISODate } from '../../lib/dates';
 import { computeWorkoutStats } from '../../lib/stats';
 
@@ -23,6 +24,10 @@ export default function Progress() {
   const series = useMemo(
     () => (checkins ? [...checkins].reverse().map((c) => ({ ...c, label: c.checkinDate.slice(5) })) : []),
     [checkins],
+  );
+  const latestRisk = riskPoints.reduce<RiskPoint | null>(
+    (latest, point) => !latest || point.date > latest.date ? point : latest,
+    null,
   );
 
   if (error) return <p className="notice notice-error" role="alert">{error}</p>;
@@ -77,19 +82,32 @@ export default function Progress() {
           </section>
         </>
       )}
-      {riskPoints.length >= 2 && (
+      {latestRisk && (
         <section className="panel stack">
-          <h2>Xu hướng nguy cơ do mô hình dự đoán (%)</h2>
-          <div style={{ height: 240 }}>
-            <ResponsiveContainer>
-              <LineChart data={riskPoints.map((p) => ({ label: p.date.slice(5), risk: Math.round(p.riskScore * 100) }))}>
-                <CartesianGrid stroke="#d5deda" strokeDasharray="3 3" />
-                <XAxis dataKey="label" /><YAxis domain={[0, 100]} /><Tooltip />
-                <Line type="monotone" dataKey="risk" name="Nguy cơ (%)" stroke="#c2570c" strokeWidth={2} />
-              </LineChart>
-            </ResponsiveContainer>
+          <div className="row-between">
+            <div className="stack">
+              <h2>Mức nguy cơ gần nhất</h2>
+              <p className="muted small">Dự đoán ngày {latestRisk.date}</p>
+            </div>
+            <RiskBadge score={latestRisk.riskScore} level={latestRisk.riskLevel} />
           </div>
-          <p className="muted small">Mỗi điểm là dự đoán lúc bạn xem gợi ý trong ngày. Biểu đồ không cho biết việc tập luyện hay gợi ý của hệ thống có làm nguy cơ thay đổi hay không.</p>
+          {riskPoints.length >= 2 ? (
+            <>
+              <h3>Xu hướng điểm dự đoán theo thời gian</h3>
+              <div style={{ height: 240 }}>
+                <ResponsiveContainer>
+                  <LineChart data={riskPoints.map((p) => ({ label: p.date.slice(5), risk: Math.round(p.riskScore * 100) }))}>
+                    <CartesianGrid stroke="#d5deda" strokeDasharray="3 3" />
+                    <XAxis dataKey="label" /><YAxis domain={[0, 100]} /><Tooltip />
+                    <Line type="monotone" dataKey="risk" name="Điểm dự đoán (%)" stroke="#c2570c" strokeWidth={2} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+              <p className="muted small">Mỗi điểm là dự đoán lúc bạn xem gợi ý trong ngày. Biểu đồ không cho biết việc tập luyện hay gợi ý của hệ thống có làm nguy cơ thay đổi hay không.</p>
+            </>
+          ) : (
+            <p className="muted small">Cần thêm các lần dự đoán để hiển thị xu hướng theo thời gian.</p>
+          )}
         </section>
       )}
       <p className="muted small">Các số liệu này chỉ mô tả hoạt động của bạn, không phải đánh giá y tế và không nói lên nguyên nhân.</p>

@@ -4,6 +4,7 @@ import { aiApi } from '../../api/endpoints';
 import { orStatus, parseError } from '../../api/errors';
 import type { RiskInfo } from '../../api/types';
 import { RISK_LABEL } from '../../lib/labels';
+import RiskBadge, { riskLevelForScore } from '../../components/RiskBadge';
 
 export default function Risk() {
   const [risk, setRisk] = useState<RiskInfo | null>(null);
@@ -29,14 +30,16 @@ export default function Risk() {
     );
   }
 
-  const levelVi = (RISK_LABEL[risk.riskLevel] ?? risk.riskLevel).toLowerCase();
+  const riskLevel = risk.riskScore === null ? risk.riskLevel : riskLevelForScore(risk.riskScore);
+  const levelVi = riskLevel === 'LOW' ? 'thấp' : riskLevel === 'MEDIUM' ? 'cần chú ý'
+    : riskLevel === 'HIGH' ? 'cao' : (RISK_LABEL[riskLevel] ?? riskLevel).toLowerCase();
 
   if (risk.source !== 'model' || risk.riskScore === null) {
     return (
       <div className="stack-lg">
         <header className="page-head"><h1>Phân tích AI</h1></header>
         <section className="panel stack">
-          <p>Mức nguy cơ tạm tính theo lịch sử tập luyện: <span className={`level ${risk.riskLevel}`}>{RISK_LABEL[risk.riskLevel] ?? risk.riskLevel}</span></p>
+          <p>Mức nguy cơ tạm tính theo lịch sử tập luyện: <RiskBadge level={risk.riskLevel} /></p>
           {risk.notes.map((n) => <p key={n} className="notice notice-warn">{n}</p>)}
           <p className="muted small">Khi dịch vụ AI chạy và có mô hình được kích hoạt, trang này sẽ hiện điểm nguy cơ và giải thích chi tiết.</p>
         </section>
@@ -45,9 +48,6 @@ export default function Risk() {
   }
 
   const maxAbs = Math.max(1, ...risk.factors.map((f) => Math.abs(f.impactPp)));
-  const score = Math.round(risk.riskScore * 100);
-  const base = risk.baseRisk !== null ? Math.round(risk.baseRisk * 100) : null;
-
   return (
     <div className="stack-lg">
       <header className="page-head">
@@ -60,13 +60,8 @@ export default function Risk() {
       )}
 
       <section className="panel stack">
-        <div className="row" style={{ gap: 20 }}>
-          <div className="score">{score}%</div>
-          <div className="stack" style={{ gap: 6 }}>
-            <span className={`level ${risk.riskLevel}`}>Mức {levelVi}</span>
-            {base !== null && <span className="muted small">Mức nền của một người dùng điển hình: {base}%</span>}
-          </div>
-        </div>
+        <RiskBadge score={risk.riskScore} />
+        <p className="muted small">Đây là dự đoán khả năng bỏ lỡ buổi tập trong 7 ngày tới, không phải đánh giá sức khỏe.</p>
         {risk.summary && <p>{risk.summary}</p>}
       </section>
 
